@@ -9,30 +9,49 @@
       exports = module.exports = dribbledb;
     }
     exports.dribbledb = dribbledb;
-    exports.dribbledb.store = node_store();
+    exports.dribbledb.internals = {store: node_store()};
   } 
   else if (typeof define === 'function' && define.amd) {
     define('dribbledb', function() {
-      dribbledb.store = browser_store();
+      dribbledb.internals = {store: browser_store()};
       return dribbledb;
     });
   } 
   else {
-    dribbledb.store = browser_store();
+    dribbledb.internals = {store: browser_store()};
     root.dribbledb = dribbledb;
   }
 
   dribbledb.version = '0.0.1';
 
   function browser_store() {
+    function browser_get(path) {
+      return;
+    }
+
+    function browser_put(path,document) {
+      return;
+    }
+
+    function browser_destroy(path){
+      return;
+    }
+
     if(!root.localStorage) {
+      // Don't like it? Fork it and send in a pull request.
       throw new Error('At the moment this only works in modern browsers'); 
     }
-    return {};
+    return { get     : browser_get
+           , put     : browser_put
+           , destroy : browser_destroy
+           };
   }
 
   function node_store() {
-    return {};
+    return { get     : null
+           , put     : null
+           , destroy : null
+           };
   }
 
 })();
