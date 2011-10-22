@@ -60,9 +60,24 @@
   }
 
   function node_store() {
-    return { get     : null
-           , put     : null
-           , destroy : null
+    function node_get(path) {
+      return;
+    }
+
+    function node_put(path,document) {
+      if(typeof document === 'object') {
+        document = JSON.stringify(document);
+      }
+      return;
+    }
+
+    function node_destroy(path) {
+      return;
+    }
+
+    return { get     : node_get
+           , put     : node_put
+           , destroy : node_delete
            };
   }
 
