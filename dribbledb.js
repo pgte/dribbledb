@@ -45,7 +45,7 @@
     }
 
     function browser_destroy(path) {
-      root.localStore.removeItem(path);
+      root.localStorage.removeItem(path);
       return;
     }
 
