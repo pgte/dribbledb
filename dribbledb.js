@@ -26,14 +26,26 @@
 
   function browser_store() {
     function browser_get(path) {
-      return;
+      var document = root.localStorage.getItem(path);
+      try {
+        document = JSON.parse(document);
+        return document;
+      }
+      catch (err) {
+        return document;
+      }
     }
 
     function browser_put(path,document) {
+      if(typeof document === 'object') {
+        document = JSON.stringify(document);
+      }
+      root.localStorage.setItem(path,document);
       return;
     }
 
-    function browser_destroy(path){
+    function browser_destroy(path) {
+      root.localStore.removeItem(path);
       return;
     }
 
