@@ -61,18 +61,18 @@
 
   function node_store() {
     function node_get(path) {
-      return;
+      throw Error('Not Implemented');
     }
 
     function node_put(path,document) {
       if(typeof document === 'object') {
         document = JSON.stringify(document);
       }
-      return;
+      throw Error('Not Implemented');
     }
 
     function node_destroy(path) {
-      return;
+      throw Error('Not Implemented');
     }
 
     return { get     : node_get
