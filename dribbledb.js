@@ -5,6 +5,7 @@
     , TIMESTAMPS       = '/_internals/timestamps'
     , IINDEX           = '/_internals/inverted-index'
     , STORAGE_NS       = '/dribbledb/'
+    , GLOBAL_REV
     ;
 
 // =============================================================== storage ~==
@@ -153,6 +154,14 @@
   // end of credit: https://github.com/broofa/node-uuid
 
 // ============================================================= internals ~==
+  function acquire_revision(current_rev) {
+    var ts = 
+        typeof current_rev === 'string' && current_rev.indexOf('-')
+      ? current_rev.split('-')[0]
+      : 0;
+    // if revision is old conflict
+    // else use global revision
+  }
 
 // ================================================================ public ~==
 
@@ -162,26 +171,16 @@
       , collections = params.collections ? params.collections : []
       , user        = params.user
       , current_rev = params.revision
+      , synchronous = params.synchronous
       , uri         = STORAGE_NS + database + '/' + path
       ;
     acquire_revision(current_rev, function (err,rev) {
-      
+      if(err) { cb(err); }
+      // else
+      //   create all indexes
+      //   save document
+      //   allow syncronous mode so save happens after indexes are available
     });
-    // tentamos obter a proxima revisao (o que faz bump a revisao)
-    //   se nao conseguirmos
-    //     conflicto
-    //   se acontecer
-    //     gravar
-    //dribbledb.internals.timestamp(
-    //  function (ts) {
-    //    var next_revision = ts + '-' + uuid();
-    //    dribbledb.internals.revision.update(uri, ts, next_revision
-    //      function(current_ts) {
-    //        if(current_rev > revision) {
-    //          return cb(new Error('conflict'));
-    //      }
-    //    });
-    //});
   };
 
 // =============================================================== exports ~==
