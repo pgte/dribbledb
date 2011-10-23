@@ -22,11 +22,16 @@
     }
   
     function browser_put(path,document,cb) {
-      if(typeof document === 'object') {
-        document = JSON.stringify(document);
+      try {
+        if(typeof document === 'object') {
+          document = JSON.stringify(document);
+        }
+        root.localStorage.setItem(path,document);
+        return cb();
       }
-      root.localStorage.setItem(path,document);
-      return cb();
+      catch (err) {
+        cb(err);
+      }
     }
   
     function browser_destroy(path,cb) {
