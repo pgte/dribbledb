@@ -2,10 +2,12 @@
   var root             = this
     , previous_dribble = root.dribbledb
     , dribbledb        = {internals: {}}
-    , TIMESTAMPS       = '/_internals/timestamps'
-    , IINDEX           = '/_internals/inverted-index'
-    , STORAGE_NS       = '/dribbledb/'
-    , GLOBAL_REV
+    , STORAGE_NS       = 'dribbledb'
+    , PATHS            =
+      { timestamps     : internals_uri_hash('/timestamps')
+      , transaction_nr : internals_uri_hash('/transaction_nr')
+      , inverted_index : internals_uri_hash('/inverted-index')
+      }
     ;
 
 // =============================================================== storage ~==
@@ -158,12 +160,64 @@
   uuid.BufferClass = BufferClass;
   // end of credit: https://github.com/broofa/node-uuid
 
+
+// ==================================================================== js ~==
+function sparse_array() {
+  var map = {};
+
+  function put(k,v){
+    map[k] = v;
+  }
+
+  function get(k) {
+    return k === null ? null : map[k];
+  }
+
+  function destroy(k) {
+    delete map[k];
+  }
+
+  function first() {
+    return get_key();
+  }
+
+  function next(k) {
+    return get_key(k);
+  }
+
+  function next_key(k) {
+    for (var i in map) {
+      if (!k) return i;
+      if (k == i) k = null; /*tricky*/
+    }
+    return null;
+  }
+
+  return { put     : put
+         , get     : get
+         , destroy : destroy
+         , first   : first
+         , next    : next
+         };
+}
+
 // ============================================================= internals ~==
-  function acquire_revision(current_rev) {
+
+  function uri_hash(database, path) {
+    return STORAGE_NS + ':' + database + ':' + path;
+  }
+
+  function internals_uri_hash(path) {
+    return uri_hash('_internals',path);
+  }
+
+  function acquire_revision(uri, current_rev) {
     var ts = 
         typeof current_rev === 'string' && current_rev.indexOf('-')
       ? current_rev.split('-')[0]
       : 0;
+    var current_revision;
+    current_revision();
     // if revision is old conflict
     // else use global revision
   }
@@ -177,9 +231,9 @@
       , user        = params.user
       , current_rev = params.revision
       , synchronous = params.synchronous
-      , uri         = STORAGE_NS + database + '/' + path
+      , uri         = uri_hash(database, path)
       ;
-    acquire_revision(current_rev, function (err,rev) {
+    acquire_revision(uri, current_rev, function (err,rev) {
       if(err) { cb(err); }
       // else
       //   create all indexes
