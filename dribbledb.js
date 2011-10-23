@@ -187,8 +187,8 @@ function sparse_array() {
 
   function next_key(k) {
     for (var i in map) {
-      if (!k) return i;
-      if (k == i) k = null; /*tricky*/
+      if (!k)      { return i; }
+      if (k === i) { k = null; }
     }
     return null;
   }
