@@ -178,11 +178,11 @@ function sparse_array() {
   }
 
   function first() {
-    return get_key();
+    return next_key();
   }
 
   function next(k) {
-    return get_key(k);
+    return next_key(k);
   }
 
   function next_key(k) {
