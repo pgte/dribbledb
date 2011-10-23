@@ -1,12 +1,13 @@
 (function() {
   var root             = this
     , previous_dribble = root.dribbledb
-    , dribbledb        = {}
+    , dribbledb        = {internals: {}}
     , TIMESTAMPS       = '/_internals/timestamps'
     , IINDEX           = '/_internals/inverted-index'
     , STORAGE_NS       = '/dribbledb/'
     ;
 
+// =============================================================== storage ~==
   function browser_store() {
     function browser_get(path,cb) {
       var document = root.localStorage.getItem(path);
@@ -43,18 +44,18 @@
   }
   
   function node_store() {
-    function node_get(path) {
+    function node_get(path,cb) {
       throw Error('Not Implemented');
     }
   
-    function node_put(path,document) {
+    function node_put(path,document,cb) {
       if(typeof document === 'object') {
         document = JSON.stringify(document);
       }
       throw Error('Not Implemented');
     }
   
-    function node_destroy(path) {
+    function node_destroy(path,cb) {
       throw Error('Not Implemented');
     }
   
@@ -63,6 +64,8 @@
            , destroy : node_delete
            };
   }
+
+// ================================================================== uuid ~==
 
   // credit: https://github.com/broofa/node-uuid
   // MIT Licensed
@@ -149,42 +152,54 @@
   uuid.BufferClass = BufferClass;
   // end of credit: https://github.com/broofa/node-uuid
 
-  dribbledb.uuid = uuid;
+// ============================================================= internals ~==
 
+// ================================================================ public ~==
+
+  dribbledb.version = '0.0.1';
+  dribbledb.put = function dribble_put(database, path, document, params, cb) {
+    var directory   = extract_directory(path)
+      , collections = params.collections ? params.collections : []
+      , user        = params.user
+      , current_rev = params.revision
+      , uri         = STORAGE_NS + database + '/' + path
+      ;
+    acquire_revision(current_rev, function (err,rev) {
+      
+    });
+    // tentamos obter a proxima revisao (o que faz bump a revisao)
+    //   se nao conseguirmos
+    //     conflicto
+    //   se acontecer
+    //     gravar
+    //dribbledb.internals.timestamp(
+    //  function (ts) {
+    //    var next_revision = ts + '-' + uuid();
+    //    dribbledb.internals.revision.update(uri, ts, next_revision
+    //      function(current_ts) {
+    //        if(current_rev > revision) {
+    //          return cb(new Error('conflict'));
+    //      }
+    //    });
+    //});
+  };
+
+// =============================================================== exports ~==
   if (typeof exports !== 'undefined') {
+    dribbledb.internals.store = node_store();
     if (typeof module !== 'undefined' && module.exports) {
       exports = module.exports = dribbledb;
     }
     exports.dribbledb = dribbledb;
-    exports.dribbledb.internals = { store: node_store() };
   } 
   else if (typeof define === 'function' && define.amd) {
     define('dribbledb', function() {
-      dribbledb.internals = { store: browser_store() };
+      dribbledb.internals.store = browser_store();
       return dribbledb;
     });
   } 
   else {
-    dribbledb.internals = {store: browser_store()};
+    dribbledb.internals.store = browser_store();
     root.dribbledb = dribbledb;
   }
-
-  dribbledb.version = '0.0.1';
-  //dribbledb.put = function dribble_put(database, path, document, params, cb) {
-  //  var directory   = extract_directory(path)
-  //    , collections = params.collections ? params.collections : []
-  //    , user        = params.user
-  //    , revision    = params.revision
-  //    , uri         = STORAGE_NS + database + '/' + path
-  //    ;
-  //  dribbledb.internals.timestamp(
-  //    function (ts) {
-  //      dribbledb.internals.current_document_revision(uri,
-  //        function(current_rev) {
-  //          if(current_rev > revision) {
-  //            return cb(new Error('conflict'));
-  //        }
-  //      });
-  //  });
-  //};
 })();
