@@ -3,6 +3,7 @@
     , previous_dribble = root.dribbledb
     , dribbledb        = {internals: {}}
     , STORAGE_NS       = 'dribbledb'
+    , rev_mutex        = mutex()
     , PATHS            =
       { timestamps     : internals_uri_hash('/timestamps')
       , transaction_nr : internals_uri_hash('/transaction_nr')
@@ -75,8 +76,8 @@
 
 // ================================================================== uuid ~==
 
-  // credit: https://github.com/broofa/node-uuid
-  // MIT Licensed
+  // credit: Robert Kieffer, https://github.com/broofa/node-uuid
+  // MIT License
   //
   // Use node.js Buffer class if available, otherwise use the Array class
   var BufferClass = typeof(Buffer) == 'function' ? Buffer : Array;
@@ -162,44 +163,52 @@
 
 
 // ==================================================================== js ~==
-function sparse_array() {
-  var map = {};
+  // credit: http://www.aitk.info/Bakery/Bakery.html
+  function mutex() {
+    var choosing  = []
+      , number    = []
+      ;
 
-  function put(k,v){
-    map[k] = v;
-  }
+    function sync(f) {
+      var i       = choosing.length;
+      choosing[i] = 0;
+      number[i]   = 0;
 
-  function get(k) {
-    return k === null ? null : map[k];
-  }
+      function new_f() {
+        var that    = this
+          , args    = Array.prototype.slice.call(arguments)
+          , j       = 0
+          , L2      = false
+          ;
 
-  function destroy(k) {
-    delete map[k];
-  }
+        choosing[i] = 1;
+        number[i]   = Math.max.apply(null,number);
+        choosing[i] = 0;
 
-  function first() {
-    return next_key();
-  }
+        (function attempt(){
+          for(;j<choosing.length;) {
+            if(L2) {
+              if(choosing[j]!==0){
+                setTimeout(attempt,10);
+                return;
+              }
+            }
+            L2 = true;
+            if( number[j]!==0 && ( number[j]<number[i] || number[j]===number[i] && j < i) ) {
+              setTimeout(attempt,10);
+              return;
+            }
+            j++;
+            L2=false;
+          }
+          f.apply(that,args);
+          number[i] = 0;
+        })();
+      }
 
-  function next(k) {
-    return next_key(k);
-  }
-
-  function next_key(k) {
-    for (var i in map) {
-      if (!k)      { return i; }
-      if (k === i) { k = null; }
+      return new_f;
     }
-    return null;
   }
-
-  return { put     : put
-         , get     : get
-         , destroy : destroy
-         , first   : first
-         , next    : next
-         };
-}
 
 // ============================================================= internals ~==
 
@@ -233,13 +242,18 @@ function sparse_array() {
       , synchronous = params.synchronous
       , uri         = uri_hash(database, path)
       ;
-    acquire_revision(uri, current_rev, function (err,rev) {
-      if(err) { cb(err); }
+
+      sync_acq_rev = rev_mutex.sync(acquire_revision);
+      try {
+        var next_rev = sync_acq_rev(uri, current_rev);
+      }
+      catch (err) {
+        cb(err);
+      }
       // else
       //   create all indexes
       //   save document
       //   allow syncronous mode so save happens after indexes are available
-    });
   };
 
 // =============================================================== exports ~==
