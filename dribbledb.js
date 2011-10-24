@@ -163,7 +163,8 @@
 
 
 // ==================================================================== js ~==
-  // credit: http://www.aitk.info/Bakery/Bakery.html
+  // credit: Marko Martin, a.in.the.k@gmail.com, http://www.aitk.info/Bakery/Bakery.html
+  // permission granted via email
   function mutex() {
     var choosing  = []
       , number    = []
@@ -220,15 +221,8 @@
     return uri_hash('_internals',path);
   }
 
-  function acquire_revision(uri, current_rev) {
-    var ts = 
-        typeof current_rev === 'string' && current_rev.indexOf('-')
-      ? current_rev.split('-')[0]
-      : 0;
-    var current_revision;
-    current_revision();
-    // if revision is old conflict
-    // else use global revision
+  function current_revision(path) {
+    dribbledb.internals.store()
   }
 
 // ================================================================ public ~==
