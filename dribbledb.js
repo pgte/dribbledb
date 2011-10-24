@@ -164,7 +164,7 @@
 
 // ==================================================================== js ~==
   // credit: Marko Martin, a.in.the.k@gmail.com, http://www.aitk.info/Bakery/Bakery.html
-  // permission granted via email
+  // Apache 2 Licensed as granted via email
   function mutex() {
     var choosing  = []
       , number    = []
