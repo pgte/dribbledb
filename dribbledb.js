@@ -163,7 +163,7 @@
 
 
 // ==================================================================== js ~==
-  // credit: Marko Martin, a.in.the.k@gmail.com, http://www.aitk.info/Bakery/Bakery.html
+  // credit: a.in.the.k@gmail.com, http://www.aitk.info/Bakery/Bakery.html
   // Apache 2 Licensed as granted via email
   function mutex() {
     var choosing  = []
