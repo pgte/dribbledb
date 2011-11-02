@@ -19,7 +19,6 @@
     , previous_dribble = root.dribbledb
     , dribbledb        = {internals: {}, fn: {}}
     , STORAGE_NS       = 'dribbledb'
-    , jQuery           = window.jQuery
     , fn, store
     ;
 
