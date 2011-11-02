@@ -1,17 +1,40 @@
+/* dribbledb: simple syncing in javascript
+ *
+ * copyright 2011 nuno job <nunojob.com> (oO)--',--
+ *
+ * licensed under the apache license, version 2.0 (the "license");
+ * you may not use this file except in compliance with the license.
+ * you may obtain a copy of the license at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * unless required by applicable law or agreed to in writing, software
+ * distributed under the license is distributed on an "as is" basis,
+ * without warranties or conditions of any kind, either express or implied.
+ * see the license for the specific language governing permissions and
+ * limitations under the license.
+ */
 (function() {
   var root             = this
     , previous_dribble = root.dribbledb
-    , dribbledb        = {internals: {}}
+    , dribbledb        = {internals: {}, fn: {}}
     , STORAGE_NS       = 'dribbledb'
-    , rev_mutex        = mutex()
-    , PATHS            =
-      { timestamps     : internals_uri_hash('/timestamps')
-      , transaction_nr : internals_uri_hash('/transaction_nr')
-      , inverted_index : internals_uri_hash('/inverted-index')
-      }
+    , jQuery           = window.jQuery
+    , fn, store
     ;
 
 // =============================================================== storage ~==
+  function inprocess_store() {
+    var store = {};
+    function inprocess_get(path,cb) { cb(null,store[path]); }
+    function inprocess_put(path,document,cb) { store[path] = document; cb(); }
+    function inprocess_destroy(path,cb) { delete store[path]; cb(); }
+    return { get     : inprocess_get
+           , put     : inprocess_put
+           , destroy : inprocess_destroy
+           };
+  }
+
   function browser_store() {
     function browser_get(path,cb) {
       var document = root.localStorage.getItem(path);
@@ -43,7 +66,6 @@
     }
   
     if(!root.localStorage) {
-      // Don't like it? Fork it and send in a pull request.
       throw new Error('At the moment this only works in modern browsers'); 
     }
     return { get     : browser_get
@@ -74,198 +96,102 @@
            };
   }
 
-// ================================================================== uuid ~==
-
-  // credit: Robert Kieffer, https://github.com/broofa/node-uuid
-  // MIT License
-  //
-  // Use node.js Buffer class if available, otherwise use the Array class
-  var BufferClass = typeof(Buffer) == 'function' ? Buffer : Array;
-
-  // Buffer used for generating string uuids
-  var _buf = new BufferClass(16);
-
-  // Cache number <-> hex string for octet values
-  var toString = [];
-  var toNumber = {};
-  for (var i = 0; i < 256; i++) {
-    toString[i] = (i + 0x100).toString(16).substr(1);
-    toNumber[toString[i]] = i;
-  }
-
-  function parse(s) {
-    var buf = new BufferClass(16);
-    var i = 0;
-    s.toLowerCase().replace(/[0-9a-f][0-9a-f]/g, function(octet) {
-      buf[i++] = toNumber[octet];
-    });
-    return buf;
-  }
-
-  function unparse(buf) {
-    var tos = toString, b = buf;
-    return tos[b[0]] + tos[b[1]] + tos[b[2]] + tos[b[3]] +
-           tos[b[4]] + tos[b[5]] +
-           tos[b[6]] + tos[b[7]] +
-           tos[b[8]] + tos[b[9]] +
-           tos[b[10]] + tos[b[11]] + tos[b[12]] +
-           tos[b[13]] + tos[b[14]] + tos[b[15]];
-  }
-
-  var ff = 0xff;
-
-  // Feature detect for the WHATWG crypto API. See
-  // http://wiki.whatwg.org/wiki/Crypto
-  var useCrypto = this.crypto && crypto.getRandomValues;
-  var rnds = useCrypto ? new Uint32Array(4) : new Array(4);
-
-  function uuid(fmt, buf, offset) {
-    var b = fmt != 'binary' ? _buf : (buf ? buf : new BufferClass(16));
-    var i = buf && offset || 0;
-
-    if (useCrypto) {
-      crypto.getRandomValues(rnds);
-    } else {
-      rnds[0] = Math.random()*0x100000000;
-      rnds[1] = Math.random()*0x100000000;
-      rnds[2] = Math.random()*0x100000000;
-      rnds[3] = Math.random()*0x100000000;
-    }
-
-    var r = rnds[0];
-    b[i++] = r & ff;
-    b[i++] = r>>>8 & ff;
-    b[i++] = r>>>16 & ff;
-    b[i++] = r>>>24 & ff;
-    r = rnds[1];
-    b[i++] = r & ff;
-    b[i++] = r>>>8 & ff;
-    b[i++] = r>>>16 & 0x0f | 0x40; // See RFC4122 sect. 4.1.3
-    b[i++] = r>>>24 & ff;
-    r = rnds[2];
-    b[i++] = r & 0x3f | 0x80; // See RFC4122 sect. 4.4
-    b[i++] = r>>>8 & ff;
-    b[i++] = r>>>16 & ff;
-    b[i++] = r>>>24 & ff;
-    r = rnds[3];
-    b[i++] = r & ff;
-    b[i++] = r>>>8 & ff;
-    b[i++] = r>>>16 & ff;
-    b[i++] = r>>>24 & ff;
-
-    return fmt === undefined ? unparse(b) : b;
-  }
-
-  uuid.parse = parse;
-  uuid.unparse = unparse;
-  uuid.BufferClass = BufferClass;
-  // end of credit: https://github.com/broofa/node-uuid
-
-
-// ==================================================================== js ~==
-  // credit: Marko Martin, a.in.the.k@gmail.com, http://www.aitk.info/Bakery/Bakery.html
-  // Apache 2 Licensed as granted via email
-  function mutex() {
-    var choosing  = []
-      , number    = []
-      ;
-
-    function sync(f) {
-      var i       = choosing.length;
-      choosing[i] = 0;
-      number[i]   = 0;
-
-      function new_f() {
-        var that    = this
-          , args    = Array.prototype.slice.call(arguments)
-          , j       = 0
-          , L2      = false
-          ;
-
-        choosing[i] = 1;
-        number[i]   = Math.max.apply(null,number);
-        choosing[i] = 0;
-
-        (function attempt(){
-          for(;j<choosing.length;) {
-            if(L2) {
-              if(choosing[j]!==0){
-                setTimeout(attempt,10);
-                return;
-              }
-            }
-            L2 = true;
-            if( number[j]!==0 && ( number[j]<number[i] || number[j]===number[i] && j < i) ) {
-              setTimeout(attempt,10);
-              return;
-            }
-            j++;
-            L2=false;
-          }
-          f.apply(that,args);
-          number[i] = 0;
-        })();
-      }
-
-      return new_f;
-    }
-  }
 
 // ============================================================= internals ~==
-
-  function uri_hash(database, path) {
-    return STORAGE_NS + ':' + database + ':' + path;
-  }
-
-  function internals_uri_hash(path) {
-    return uri_hash('_internals',path);
-  }
-
-  function current_revision(path) {
-    dribbledb.internals.store()
+  function uri(db, path, type) { return STORAGE_NS + ':' + db + ':' + type + ':' + path; }
+  function doc_uri(db, path)   { return uri(db,path,'doc');  }
+  function meta_uri(db, path)  { return uri(db,path,'meta'); }
+  // credit: underscore.js
+  function each(obj, iterator, context) {
+    if (obj === null) return;
+    if (Array.prototype.forEach && obj.forEach === Array.prototype.forEach) {
+      obj.forEach(iterator, context);
+    } else if (obj.length === +obj.length) {
+      for (var i = 0, l = obj.length; i < l; i++) {
+        if (i in obj && iterator.call(context, obj[i], i, obj) === breaker) return;
+      }
+    } else {
+      for (var key in obj) {
+        if (hasOwnProperty.call(obj, key)) {
+          if (iterator.call(context, obj[key], key, obj) === breaker) return;
+        }
+      }
+    }
   }
 
 // ================================================================ public ~==
 
   dribbledb.version = '0.0.1';
-  dribbledb.put = function dribble_put(database, path, document, params, cb) {
-    var directory   = extract_directory(path)
-      , collections = params.collections ? params.collections : []
-      , user        = params.user
-      , current_rev = params.revision
-      , synchronous = params.synchronous
-      , uri         = uri_hash(database, path)
-      ;
+  // credit: underscore js
+  dribbledb.fn.extend = function(obj) {
+      each(Array.prototype.slice.call(arguments, 1), function(source) {
+        for (var prop in source) {
+          if (source[prop] !== void 0) obj[prop] = source[prop];
+        }
+      });
+      return obj;
+    };
 
-      sync_acq_rev = rev_mutex.sync(acquire_revision);
-      try {
-        var next_rev = sync_acq_rev(uri, current_rev);
-      }
-      catch (err) {
-        cb(err);
-      }
-      // else
-      //   create all indexes
-      //   save document
-      //   allow syncronous mode so save happens after indexes are available
+  // fixme: put should save metadata  created_at, updated_at, etag
+  dribbledb.sync = function dribble_sync(params, cb) {
+    cb = (typeof cb === 'function') ? cb : function(){};
+    if(typeof params === 'string') { params = {uri: params}; } // if string its a uri
+    if(typeof params !== 'object') { return cb(new Error('no_params')); }
+    var defaults =
+        { on_start    : function(){}
+        , on_end      : function(){}
+        , before_save : function(){}
+        , after_save  : function(){}
+        , notify      : function(){}
+        }
+      , settings = fn.extend({},defaults,params);
+    try {
+      settings.on_start();
+      if(typeof settings.uri !== 'string') { throw new Error('invalid_resource'); }
+      fn.request.get(settings.uri, function (err,h,server_copy) {
+        if(err) { return cb(err); }
+        // if its a 409, conflict
+        var local_copy = settings.local; //|| dribbledb.get(settings.uri);
+        if(local_copy) {
+          merge(local_copy,server_copy);
+        } else {
+          // update local copy
+          cb(null,b,h);
+        }
+      });
+        // try getting it from internal using the resource key
+          // if successful do merge with that
+        // might still be undefined after this step
+          // then just get it and put it in internal memory
+      // on success you update locally stored value
+    } 
+    catch (exc) { cb(exc); }
+    finally     { settings.on_end(); }
   };
 
 // =============================================================== exports ~==
-  if (typeof exports !== 'undefined') {
-    dribbledb.internals.store = node_store();
+  if (typeof exports !== 'undefined') { // nodejs
+    try         { dribbledb.internals.store = node_store();      }
+    catch (e) { dribbledb.internals.store = inprocess_store(); }
+    dribbledb.fn.request =  require('request');
     if (typeof module !== 'undefined' && module.exports) {
       exports = module.exports = dribbledb;
     }
     exports.dribbledb = dribbledb;
-  } 
-  else if (typeof define === 'function' && define.amd) {
-    define('dribbledb', function() {
-      dribbledb.internals.store = browser_store();
-      return dribbledb;
-    });
-  } 
-  else {
-    dribbledb.internals.store = browser_store();
-    root.dribbledb = dribbledb;
+  } else { // browser
+    try         { dribbledb.internals.store = browser_store();   }
+    catch (exc) { dribbledb.internals.store = inprocess_store(); }
+    dribbledb.fn.request = $.request;
+    if (typeof define === 'function' && define.amd) {
+      define('dribbledb', function() {
+        return dribbledb;
+      });
+    } 
+    else {
+      root.dribbledb = dribbledb;
+    }
   }
+  // shortcuts
+  fn    = dribbledb.fn;
+  store = dribbledb.store;
 })();
