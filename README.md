@@ -73,7 +73,7 @@ The first and only argument must be the base URL for a RESTful webservice that a
       console.log('key ' + key + ' was changed on remote: ' + operation);
     });
 
-Operation can have the following values:
+The 3rd argument contains the remote operation and can have the following values:
 
 * "updated"
 * "inserted"
