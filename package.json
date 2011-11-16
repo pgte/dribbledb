@@ -1,0 +1,12 @@
+{
+    "name": "dribbledb"
+  , "authors": [
+      "Nuno Job"
+  ]
+  , "devDependencies": {
+      "uglify-js": "1.1.x"
+  }
+  , "scripts": {
+      "test": "node_modules/.bin/testling tests/test.js"
+  }
+}
