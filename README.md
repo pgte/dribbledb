@@ -21,6 +21,10 @@ The first and only argument must be the base URL for a RESTful webservice that a
 
     var value = db.get('key');
 
+### destroy:
+
+    db.destroy('key');
+
 ### sync:
 
     db.sync(function(err) {
@@ -65,6 +69,12 @@ The first and only argument must be the base URL for a RESTful webservice that a
 
 #### "notify"
 
-    db.sync.on('notify', function(key, value) {
-      console.log('key ' + key + ' was updated on remote');
+    db.sync.on('notify', function(key, value, operation) {
+      console.log('key ' + key + ' was changed on remote: ' + operation);
     });
+
+Operation can have the following values:
+
+* "updated"
+* "inserted"
+* "destroyed"
