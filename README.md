@@ -4,7 +4,14 @@
 
 ### Instantiate a dribbledb:
 
-    var db = dribbledb('http://myhost.com');
+    var db = dribbledb('http://myhost.com/posts');
+
+The first and only argument must be the base URL for a RESTful webservice that accepts requests like:
+
+    PUT http://myhost.com/posts
+    GET http://myhost.com/posts/1
+    POST http://myhost.com/posts/1
+    DELETE http://myhost.com/posts/1
 
 ### put:
 
