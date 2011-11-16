@@ -37,9 +37,13 @@ EventEmitter.prototype.emit = function(event){
     , callbacks = this.callbacks[event]
     , i;
 
-  if (callbacks) {
+  if (callbacks && callbacks.length > 0) {
     for (i = 0, len = callbacks.length; i < len; ++i) {
       callbacks[i](args);
+    }
+  } else {
+    if ('error' === event) {
+      throw args[0] || new Error('Unspecified error');
     }
   }
 

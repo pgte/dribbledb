@@ -31,6 +31,8 @@ The first and only argument must be the base URL for a RESTful webservice that a
       if (err) { return throw err; }
     });
 
+If you like you can omit the callback. In that case, if an error is caught, db.sync will emit an "error" event.
+
 ### solving conflicts when syncing:
 
     function resolveConflict(myVerDoc, theirVerDoc, solved) {
@@ -42,6 +44,12 @@ The first and only argument must be the base URL for a RESTful webservice that a
     });
 
 ### callbacks when syncing:
+
+#### "error"
+
+    db.sync.on('error', function(err) {
+      console.log('Error caught: ' + err.message);
+    });
 
 #### "start"
 
