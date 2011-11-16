@@ -122,7 +122,7 @@
 
 // =============================================================== exports ~==
   dribbledb.internals.store = browser_store();
-  dribbledb.fn.request = $.request;
+  dribbledb.fn.request = superagent.request;
   if (typeof define === 'function' && define.amd) {
     define('dribbledb', function() {
       return dribbledb;
