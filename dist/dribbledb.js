@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Wed Nov 16 14:49:32 2011 +0000
+ * BUILD DATE: Wed Nov 16 19:10:20 2011 +0000
  */
 /**
  * Slice reference.
@@ -433,8 +433,9 @@ var superagent = (function(exports){
     this.noContent = 204 === status || 1223 === status;
     this.badRequest = 400 === status;
     this.unauthorized = 401 === status;
-    this.notAcceptable = 406 === status;
     this.notFound = 404 === status;
+    this.notAcceptable = 406 === status;
+    this.conflict = 409 === status;
   };
 
   /**
@@ -459,7 +460,7 @@ var superagent = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      self.callback(new Response(self.xhr));
+      self.callback(null, new Response(self.xhr));
     });
   }
 
@@ -792,8 +793,8 @@ var superagent = (function(exports){
 }({}));(function() {
   var root             = this
     , previous_dribble = root.dribbledb
-    , STORAGE_NS       = 'dribbledb'
-    , request, local_store
+    , STORAGE_NS       = 'dbd'
+    , local_store
     ;
 
 // =============================================================== storage ~==
@@ -812,17 +813,33 @@ var superagent = (function(exports){
       root.localStorage.removeItem(path);
     }
     
-    function browser_all_keys(path) {
+    function browser_all_keys_iterator(final_call, path, cb) {
       var storage = root.localStorage;
-      var i, key, keys = [];
-      for(i = 0; i < storage.length; i++) {
-        key = storage.key(i);
-        console.log(key);
-        if (0 === key.indexOf(path)) {
-          console.log('match: ' + path);
-          keys.push(key.slice(path.length + 1));
+      var i = 0, key;
+      (function iterate() {
+        
+        function next() {
+          i ++;
+          if (i < storage.length) { iterate(); }
+          else { if (final_call) { cb(); } }
         }
-      }
+        
+        if (key = storage.key(i)) {
+          if (0 === key.indexOf(path)) {
+            cb(key.slice(path.length + 1), browser_get(key), next);
+          } else {
+            next();
+          }
+        }
+      }());
+    }
+    
+    function browser_all_keys(path) {
+      var keys = [];
+      browser_all_keys_iterator(false, path, function(key, value, done) {
+        keys.push(key);
+        done();
+      });
       return keys;
     }
   
@@ -832,6 +849,7 @@ var superagent = (function(exports){
     return { get     : browser_get
            , put     : browser_put
            , destroy : browser_destroy
+           , all_keys_iterator: browser_all_keys_iterator
            , all_keys: browser_all_keys
            };
   }
@@ -840,57 +858,108 @@ var superagent = (function(exports){
 
   // shortcuts
   local_store = browser_store();
-  request = superagent.request;
 
   // uri building
-  function uri(type, base_url) { return STORAGE_NS + ':' + type + ':' + base_url; }
-  function global_item_uri(type, base_url, id)   {
+  function key(type, base_url) { return STORAGE_NS + ':' + type + ':' + base_url; }
+  function global_item_key(type, base_url, id)   {
     if (id !== undefined) {
       base_url += ('/' + id);
     }
-    return uri(type,  base_url);
+    return key(type,  base_url);
   }
-  function global_doc_uri(base_url, id)   { return global_item_uri('doc', base_url,  id);  }
-  function global_meta_uri(base_url, id)   { return global_item_uri('meta', base_url, id);  }
+  function global_doc_key(base_url, id)   { return global_item_key('d', base_url,  id);  }
+  function global_meta_key(base_url, id)   { return global_item_key('m', base_url, id);  }
 
 // ================================================================ public ~==
 
   function dribbledb(base_url) {
     var that = {}
+      , request = superagent
       , put
       , sync;
     
-    function doc_uri(id) {
-      return global_doc_uri(base_url, id);
+    function doc_key(id) {
+      return global_doc_key(base_url, id);
     }  
 
-    function meta_uri(id) {
-      return global_meta_uri(base_url, id);
+    function meta_key(id) {
+      return global_meta_key(base_url, id);
     }  
     
     function put(key, value) {
-      var uri = doc_uri(key);
+      var uri = doc_key(key);
       local_store.put(uri, value);
-      local_store.put(meta_uri(key), true);
+      local_store.put(meta_key(key), 'p');
     }
     
     function get(key) {
-      return local_store.get(doc_uri(key));
+      return local_store.get(doc_key(key));
     }
 
     function destroy(key) {
-      local_store.destroy(doc_uri(key));
+      local_store.destroy(doc_key(key));
+      local_store.put(meta_key(key), 'd');
     }
     
-    function unsynced() {
-      return local_store.all_keys(meta_uri());
+    function unsynced_keys() {
+      return local_store.all_keys(meta_key());
+    }
+    
+    function unsynced_keys_iterator(cb) {
+      local_store.all_keys_iterator(true, meta_key(), cb);
     }
 
 
     // ========================================= sync   ~==
     sync = (function() {
+      var syncEmitter = new EventEmitter();
+      
       function sync(cb) {
-        // TODO
+        
+        function error(err) {
+          if (err) {
+            console.log('error:', err);
+            if (typeof(cb) === 'function') { cb(err); }
+            else { syncEmitter.emot('error', err); }
+            return true;
+          }
+          return false;
+        }
+        
+        unsynced_keys_iterator(function(key, value, done) {
+          var uri;
+          
+          if('undefined' === typeof(key)) {
+            if (cb) { cb(); }
+            return;
+          }
+          
+          local_store.destroy(meta_key(key));
+          
+          uri = base_url + '/' + key;
+          
+          switch (value) {
+            case 'p':
+              console.log('putting to ' + uri);
+              request.put(uri, get(key), function(err) {
+                if (! error(err)) {
+                  console.log('put ended');
+                  done();
+                }
+              });
+            break;
+            case 'd':
+              console.log('delling to ' + uri);
+              request.del(uri, function(err) {
+                console.log(arguments);
+                if (! error(err)) {
+                  console.log('del ended');
+                  done();
+                }
+              });
+            break;
+          }
+        });
       }
 
       sync.on = function() {
@@ -901,13 +970,14 @@ var superagent = (function(exports){
       };
       
       return sync;
+      
     }());
     
     that.sync = sync;
     that.put = put;
     that.get = get;
     that.destroy = destroy;
-    that.unsynced = unsynced;
+    that.unsynced_keys = unsynced_keys
     
     return that;
   }

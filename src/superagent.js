@@ -414,8 +414,9 @@ var superagent = (function(exports){
     this.noContent = 204 === status || 1223 === status;
     this.badRequest = 400 === status;
     this.unauthorized = 401 === status;
-    this.notAcceptable = 406 === status;
     this.notFound = 404 === status;
+    this.notAcceptable = 406 === status;
+    this.conflict = 409 === status;
   };
 
   /**
@@ -440,7 +441,7 @@ var superagent = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      self.callback(new Response(self.xhr));
+      self.callback(null, new Response(self.xhr));
     });
   }
 

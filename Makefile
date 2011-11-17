@@ -34,7 +34,7 @@ DATE=$(shell git log -1 --pretty=format:%ad)
 
 all: core
 
-core: dribbledb min size
+core: dribbledb
 	@@echo "DribbleDB build complete."
 
 ${DIST_DIR}:
