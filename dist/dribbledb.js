@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 17 14:41:46 2011 +0000
+ * BUILD DATE: Fri Nov 18 12:33:10 2011 +0000
  */
 /**
  * Slice reference.
@@ -460,7 +460,10 @@ var superagent = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      self.callback(null, new Response(self.xhr));
+      var resp = new Response(self.xhr);
+      var err = undefined;
+      if (resp.status === 0) { err = new Error('Unknown XHR Error'); }
+      self.callback(err, resp);
     });
   }
 

@@ -441,7 +441,10 @@ var superagent = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      self.callback(null, new Response(self.xhr));
+      var resp = new Response(self.xhr);
+      var err = undefined;
+      if (resp.status === 0) { err = new Error('Unknown XHR Error'); }
+      self.callback(err, resp);
     });
   }
 
