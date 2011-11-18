@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Wed Nov 16 19:10:20 2011 +0000
+ * BUILD DATE: Thu Nov 17 14:41:46 2011 +0000
  */
 /**
  * Slice reference.
@@ -914,51 +914,72 @@ var superagent = (function(exports){
     sync = (function() {
       var syncEmitter = new EventEmitter();
       
-      function sync(cb) {
+      function sync(resolveConflicts, cb) {
+        var calledback = false;
+        
+        if (arguments.length < 2) { cb = resolveConflicts; resolveConflicts = undefined;}
+        
+        function callback() {
+          if (! calledback && typeof(cb) === 'function') {
+            calledback = true;
+            cb.apply(that, arguments);
+            return true;
+          }
+          return false;
+        }
         
         function error(err) {
           if (err) {
-            console.log('error:', err);
-            if (typeof(cb) === 'function') { cb(err); }
-            else { syncEmitter.emot('error', err); }
+            if (! callback(err)) {
+              syncEmitter.emit('error', err);
+            }
             return true;
           }
           return false;
         }
         
         unsynced_keys_iterator(function(key, value, done) {
-          var uri;
+          var method
+            , mine = get(key)
+            , uri = base_url + '/' + key
+            , remoteArgs = [];
           
-          if('undefined' === typeof(key)) {
-            if (cb) { cb(); }
+          if('undefined' === typeof(key)) { // we finished the keys, just call back
+            callback();
             return;
           }
           
           local_store.destroy(meta_key(key));
           
-          uri = base_url + '/' + key;
+          remoteArgs.push(uri);
+          method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
+          if (! method) { throw new Error('Invalid meta action: ' + value); }
+          if (method === 'put') { remoteArgs.push(mine); }
           
-          switch (value) {
-            case 'p':
-              console.log('putting to ' + uri);
-              request.put(uri, get(key), function(err) {
-                if (! error(err)) {
-                  console.log('put ended');
-                  done();
+          function handleResponse(err, res) {
+            if (err) { return error(err); }
+            // ======= conflict! ~==
+            if (res.conflict) {
+              request.get(uri, function(err, resp) {
+                if (err) { return error(err); }
+                if (resolveConflicts) {
+                  throw new Error('Not implemented yet');
+                  resolveConflicts(gugu); // TODO
+                } else {
+                  err = new Error('Conflict');
+                  err.key = key;
+                  err.mine = mine;
+                  err.theirs = resp.body
+                  error(err);
                 }
               });
-            break;
-            case 'd':
-              console.log('delling to ' + uri);
-              request.del(uri, function(err) {
-                console.log(arguments);
-                if (! error(err)) {
-                  console.log('del ended');
-                  done();
-                }
-              });
-            break;
+            } else {
+              done();
+            }
           }
+          
+          remoteArgs.push(handleResponse);
+          request[method].apply(request, remoteArgs);
         });
       }
 
