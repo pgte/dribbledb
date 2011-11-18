@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Fri Nov 18 12:46:51 2011 +0000
+ * BUILD DATE: Fri Nov 18 13:06:37 2011 +0000
  */
 /**
  * Slice reference.
@@ -816,7 +816,7 @@ var superagent = (function(exports){
       root.localStorage.removeItem(path);
     }
     
-    function browser_all_keys_iterator(final_call, path, cb) {
+    function browser_all_keys_iterator(path, cb, done) {
       var storage = root.localStorage;
       var i = 0, key;
       (function iterate() {
@@ -824,7 +824,7 @@ var superagent = (function(exports){
         function next() {
           i ++;
           if (i < storage.length) { iterate(); }
-          else { if (final_call) { cb(); } }
+          else { if (done) { done(); } }
         }
         
         if (key = storage.key(i)) {
@@ -839,7 +839,7 @@ var superagent = (function(exports){
     
     function browser_all_keys(path) {
       var keys = [];
-      browser_all_keys_iterator(false, path, function(key, value, done) {
+      browser_all_keys_iterator(path, function(key, value, done) {
         keys.push(key);
         done();
       });
@@ -908,8 +908,8 @@ var superagent = (function(exports){
       return local_store.all_keys(meta_key());
     }
     
-    function unsynced_keys_iterator(cb) {
-      local_store.all_keys_iterator(true, meta_key(), cb);
+    function unsynced_keys_iterator(cb, done) {
+      local_store.all_keys_iterator(meta_key(), cb, done);
     }
 
 
@@ -947,13 +947,6 @@ var superagent = (function(exports){
             , uri = base_url + '/' + key
             , remoteArgs = [];
           
-          if('undefined' === typeof(key)) { // we finished the keys, just call back
-            callback();
-            return;
-          }
-          
-          local_store.destroy(meta_key(key));
-          
           remoteArgs.push(uri);
           method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
           if (! method) { throw new Error('Invalid meta action: ' + value); }
@@ -979,6 +972,7 @@ var superagent = (function(exports){
                 }
               });
             } else {
+              local_store.destroy(meta_key(key));
               done();
             }
           }
@@ -987,7 +981,9 @@ var superagent = (function(exports){
           request[method].apply(request, remoteArgs);
         }
         
-        unsynced_keys_iterator(sync_one);
+        unsynced_keys_iterator(sync_one, function() {
+          callback();
+        });
       }
 
       sync.on = function() {

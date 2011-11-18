@@ -21,7 +21,7 @@
       root.localStorage.removeItem(path);
     }
     
-    function browser_all_keys_iterator(final_call, path, cb) {
+    function browser_all_keys_iterator(path, cb, done) {
       var storage = root.localStorage;
       var i = 0, key;
       (function iterate() {
@@ -29,7 +29,7 @@
         function next() {
           i ++;
           if (i < storage.length) { iterate(); }
-          else { if (final_call) { cb(); } }
+          else { if (done) { done(); } }
         }
         
         if (key = storage.key(i)) {
@@ -44,7 +44,7 @@
     
     function browser_all_keys(path) {
       var keys = [];
-      browser_all_keys_iterator(false, path, function(key, value, done) {
+      browser_all_keys_iterator(path, function(key, value, done) {
         keys.push(key);
         done();
       });
@@ -113,8 +113,8 @@
       return local_store.all_keys(meta_key());
     }
     
-    function unsynced_keys_iterator(cb) {
-      local_store.all_keys_iterator(true, meta_key(), cb);
+    function unsynced_keys_iterator(cb, done) {
+      local_store.all_keys_iterator(meta_key(), cb, done);
     }
 
 
@@ -152,13 +152,6 @@
             , uri = base_url + '/' + key
             , remoteArgs = [];
           
-          if('undefined' === typeof(key)) { // we finished the keys, just call back
-            callback();
-            return;
-          }
-          
-          local_store.destroy(meta_key(key));
-          
           remoteArgs.push(uri);
           method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
           if (! method) { throw new Error('Invalid meta action: ' + value); }
@@ -184,6 +177,7 @@
                 }
               });
             } else {
+              local_store.destroy(meta_key(key));
               done();
             }
           }
@@ -192,7 +186,9 @@
           request[method].apply(request, remoteArgs);
         }
         
-        unsynced_keys_iterator(sync_one);
+        unsynced_keys_iterator(sync_one, function() {
+          callback();
+        });
       }
 
       sync.on = function() {
