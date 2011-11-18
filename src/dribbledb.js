@@ -146,7 +146,7 @@
           return false;
         }
         
-        unsynced_keys_iterator(function(key, value, done) {
+        function sync_one(key, value, done) {
           var method
             , mine = get(key)
             , uri = base_url + '/' + key
@@ -171,8 +171,10 @@
               request.get(uri, function(err, resp) {
                 if (err) { return error(err); }
                 if (resolveConflicts) {
-                  throw new Error('Not implemented yet');
-                  resolveConflicts(gugu); // TODO
+                  resolveConflicts(mine, resp.body, function(resolved) {
+                    put(key, resolved);
+                    sync_one(key, value, done);
+                  });
                 } else {
                   err = new Error('Conflict');
                   err.key = key;
@@ -188,7 +190,9 @@
           
           remoteArgs.push(handleResponse);
           request[method].apply(request, remoteArgs);
-        });
+        }
+        
+        unsynced_keys_iterator(sync_one);
       }
 
       sync.on = function() {

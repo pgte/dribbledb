@@ -128,4 +128,49 @@ describe('DribbleDB', function() {
     });
   });
 
+  describe("when you have yet another second db just for yourself where you have overriden request", function() {
+    var db = dbd('http://foo.com/syncables3');
+    
+    beforeEach(function() {
+      this.xhr = sinon.useFakeXMLHttpRequest();
+      var requests = this.requests = [];
+      this.xhr.onCreate = function(xhr) {
+        requests.push(xhr);
+      };
+    });
+    
+    afterEach(function() {
+      this.xhr.restore();
+    });
+    
+    it("should be able to resolve conflicts", function() {
+      var unsynced
+        , resolveConflictCalled = false
+        , callback = sinon.spy()
+
+      function resolveConflict(a, b, done) {
+        resolveConflictCalled = true;
+        done(3);
+      }
+
+      db.put("a", 1);
+      db.sync(resolveConflict, callback);
+      
+      expect(callback.callCount).toEqual(0);
+      expect(this.requests.length).toEqual(1);
+      this.requests[0].respond(409, {}, '');
+      expect(this.requests.length).toEqual(2);
+      this.requests[1].respond(200, {'Content-Type': 'application/json'}, '2');
+      expect(resolveConflictCalled).toEqual(true);
+
+      expect(this.requests.length).toEqual(3);
+      this.requests[2].respond(201, {}, '');
+
+      expect(callback.called).toEqual(true);
+      expect(callback.callCount).toEqual(1);
+      expect(callback.getCall(0).args.length).toEqual(0);
+      expect(db.get("a")).toEqual(3);
+    });
+  });
+
 });
