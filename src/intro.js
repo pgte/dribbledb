@@ -1,6 +1,6 @@
 /* dribbledb: simple syncing in javascript
  *
- * copyright 2011 nuno job <nunojob.com> (oO)--',--
+ * copyright 2011 pedro teixeira <metaduck.com> & nuno job <nunojob.com> (oO)--',--
  *
  * licensed under the apache license, version 2.0 (the "license");
  * you may not use this file except in compliance with the license.
