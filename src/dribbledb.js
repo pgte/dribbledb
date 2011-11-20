@@ -31,8 +31,8 @@
           if (i < storage.length) { iterate(); }
           else { if (done) { done(); } }
         }
-        
-        if (key = storage.key(i)) {
+        key = storage.key(i);
+        if (key) {
           if (0 === key.indexOf(path)) {
             cb(key.slice(path.length + 1), browser_get(key), next);
           } else {
@@ -77,27 +77,32 @@
   }
   function global_doc_key(base_url, id)   { return global_item_key('d', base_url,  id);  }
   function global_meta_key(base_url, id)   { return global_item_key('m', base_url, id);  }
+  function global_since_key(base_url)   { return global_item_key('s', base_url);  }
 
 // ================================================================ public ~==
 
   function dribbledb(base_url) {
     var that = {}
       , request = superagent
-      , put
       , sync;
     
     function doc_key(id) {
       return global_doc_key(base_url, id);
-    }  
+    }
 
     function meta_key(id) {
       return global_meta_key(base_url, id);
-    }  
+    }
     
-    function put(key, value) {
+    function since_key() {
+      return global_since_key(base_url);
+    }
+    
+    function put(key, value, remote) {
       var uri = doc_key(key);
       local_store.put(uri, value);
-      local_store.put(meta_key(key), 'p');
+      if (! remote) { local_store.put(meta_key(key), 'p'); }
+      
     }
     
     function get(key) {
@@ -116,12 +121,21 @@
     function unsynced_keys_iterator(cb, done) {
       local_store.all_keys_iterator(meta_key(), cb, done);
     }
+    
+    function pulled_since(val) {
+      var key = since_key();
+      if (! val) {
+        return local_store.get(key) || 0;
+      } else {
+        local_store.put(key, val);
+      }
+    }
 
 
     // ========================================= sync   ~==
     sync = (function() {
       var syncEmitter = new EventEmitter();
-      
+
       function sync(resolveConflicts, cb) {
         var calledback = false;
         
@@ -146,7 +160,8 @@
           return false;
         }
         
-        function sync_one(key, value, done) {
+        // === push to remote ~=============
+        function push_one(key, value, done) {
           var method
             , mine = get(key)
             , uri = base_url + '/' + key
@@ -166,13 +181,13 @@
                 if (resolveConflicts) {
                   resolveConflicts(mine, resp.body, function(resolved) {
                     put(key, resolved);
-                    sync_one(key, value, done);
+                    push_one(key, value, done);
                   });
                 } else {
                   err = new Error('Conflict');
                   err.key = key;
                   err.mine = mine;
-                  err.theirs = resp.body
+                  err.theirs = resp.body;
                   error(err);
                 }
               });
@@ -186,8 +201,73 @@
           request[method].apply(request, remoteArgs);
         }
         
-        unsynced_keys_iterator(sync_one, function() {
-          callback();
+        // === pull from remote ~=============
+        function pull(cb) {
+          var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
+          request
+            .get(uri)
+            .type('json')
+            .end(function(err, resp) {
+              var i, body, results, change, key, theirs, err2, mine;
+            
+              if (err) { return error(err); }
+              if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
+              if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
+              body = resp.body;
+              if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
+              if (! body.hasOwnProperty('last_seq')) {
+                err2 = new Error('response body does not have .last_seq: ' + uri);
+                err2.body = body;
+                return cb(err2);
+              }
+              if (! body.hasOwnProperty('results')) {
+                err2 = new Error('response body does not have .results: ' + uri);
+                err2.body = body;
+                return cb(err2);
+              }
+
+              results = body.results;
+              i = -1;
+
+              (function next() {
+                i += 1;
+                if (i < results.length) {
+                  change = results[i];
+                  key = change.id;
+                  theirs = change.doc;
+                  if (get(meta_key(key))) {
+                    if (resolveConflicts) {
+                      mine = get(doc_key(key));
+                      resolveConflicts(mine, theirs, function(resolved) {
+                        put(key, resolved);
+                        next();
+                      });
+                    } else {
+                      err2 = new Error('Conflict');
+                      err2.key = key;
+                      err2.mine = mine;
+                      err2.theirs = theirs;
+                      error(err2);
+                      next();
+                    }
+                  } else {
+                    put(key, theirs, true);
+                    next();
+                  }
+                } else {
+                  // finished
+                  pulled_since(body.last_seq);
+                  cb();
+                }
+              }());
+            });
+        }
+        
+        unsynced_keys_iterator(push_one, function() {
+          pull(function(err) {
+            if (err) { return error(err); }
+            callback();
+          });
         });
       }
 
@@ -206,7 +286,7 @@
     that.put = put;
     that.get = get;
     that.destroy = destroy;
-    that.unsynced_keys = unsynced_keys
+    that.unsynced_keys = unsynced_keys;
     
     return that;
   }

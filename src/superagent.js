@@ -126,7 +126,7 @@ var superagent = (function(exports){
    */
 
   function isObject(obj) {
-    if (null === obj) { return false; }
+    if (null === obj || undefined == obj) { return false; }
     var cons = obj.constructor;
     return cons && Object === cons;
   }
@@ -229,6 +229,7 @@ var superagent = (function(exports){
   exports.parse = {
       'application/x-www-form-urlencoded': parseString
     , 'application/json': JSON.parse
+    , 'text/plain': JSON.parse
   };
 
   /**
@@ -368,6 +369,7 @@ var superagent = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
+    console.log('this.contentType:', this.contentType);
     var parse = exports.parse[this.contentType];
     return parse
       ? parse(str)
@@ -441,8 +443,9 @@ var superagent = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      var resp = new Response(self.xhr);
-      var err = undefined;
+      var resp = new Response(self.xhr)
+        , err;
+
       if (resp.status === 0) { err = new Error('Unknown XHR Error'); }
       self.callback(err, resp);
     });

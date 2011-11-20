@@ -1,13 +1,14 @@
 describe('DribbleDB', function() {
   var dbd = window.dribbledb;
   
-  (function() {
+  function removeAll() {
     var i, key;
     for(i=0; i < localStorage.length; i++) {
       key = localStorage.key(i);
       localStorage.removeItem(key);
     }
-  }());
+  }
+  beforeEach(removeAll);
   
   it("should exist", function() {
     expect(dbd).toBeDefined();
@@ -83,7 +84,7 @@ describe('DribbleDB', function() {
       db.put("c", 3);
       db.destroy("b");
       db.sync(callback);
-      for(var i = 0; i < 3; i ++) {
+      for(var i = 0; i < 4; i ++) {
         expect(this.requests.length).toEqual(i + 1);
         this.requests[i].respond(201, {}, '');
       }
@@ -166,10 +167,44 @@ describe('DribbleDB', function() {
       expect(this.requests.length).toEqual(3);
       this.requests[2].respond(201, {}, '');
 
+      expect(this.requests.length).toEqual(4);
+      this.requests[3].respond(200, {'Content-Type': 'application/json'}, '{"results":[], "last_seq":0}');
+
       expect(callback.called).toEqual(true);
       expect(callback.callCount).toEqual(1);
       expect(callback.getCall(0).args.length).toEqual(0);
       expect(db.get("a")).toEqual(3);
+    });
+  });
+
+  describe("when you have yet another third db just for yourself where you have overriden request", function() {
+    var db = dbd('http://foo.com/syncables4');
+    
+    beforeEach(function() {
+      this.xhr = sinon.useFakeXMLHttpRequest();
+      var requests = this.requests = [];
+      this.xhr.onCreate = function(xhr) {
+        requests.push(xhr);
+      };
+    });
+    
+    afterEach(function() {
+      this.xhr.restore();
+    });
+    
+    it("should be able to pull changes from remote", function() {
+      var callback = sinon.spy()
+
+      db.sync(callback);
+      
+      expect(this.requests.length).toEqual(1);
+      this.requests[0].respond(200, {'Content-Type': 'application/json'}, '{"results":[{"id":"a","doc":1},{"id":"b","doc":2}], "last_seq":2}');
+
+      expect(callback.called).toEqual(true);
+      expect(callback.callCount).toEqual(1);
+      expect(callback.getCall(0).args.length).toEqual(0);
+      expect(db.get("a")).toEqual(1);
+      expect(db.get("b")).toEqual(2);
     });
   });
 
