@@ -12,7 +12,8 @@ JS_LINT ?= `which jslint`
 COMPILER = ${JS_ENGINE} ${BUILD_DIR}/uglify.js --unsafe
 BROWSERIFY ?= `which browserify`
 
-BASE_FILES = ${SRC_DIR}/request.js\
+BASE_FILES = ${SRC_DIR}/event_emitter.js\
+	${SRC_DIR}/request.js\
 	${SRC_DIR}/dribbledb.js
 
 MODULES = ${SRC_DIR}/first.js\
