@@ -12,3 +12,5 @@
 * versioning?
 * db.nuke() -> destroy all docs
 * pagination
+* filtering
+* views (?)

@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sun Nov 20 23:30:16 2011 +0000
+ * BUILD DATE: Sun Nov 20 23:32:30 2011 +0000
  */
 
  (function() {
@@ -774,13 +774,7 @@ var request = (function(exports){
 
   return exports;
   
-}({}));var root             = this
-  , previous_dribble = root.dribbledb
-  , STORAGE_NS       = 'dbd'
-  , local_store
-  ;
-
-// =============================================================== storage ~==
+}({}));// =============================================================== storage ~==
 function browser_store() {
   function browser_get(path) {
     var document = root.localStorage.getItem(path);
@@ -836,6 +830,11 @@ function browser_store() {
          , all_keys: browser_all_keys
          };
 }
+var root             = this
+  , previous_dribble = root.dribbledb
+  , STORAGE_NS       = 'dbd'
+  , local_store
+  ;
 
 // ============================================================= internals ~==
 
