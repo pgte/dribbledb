@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sun Nov 20 23:32:30 2011 +0000
+ * BUILD DATE: Sun Nov 20 23:34:28 2011 +0000
  */
 
  (function() {
@@ -830,18 +830,6 @@ function browser_store() {
          , all_keys: browser_all_keys
          };
 }
-var root             = this
-  , previous_dribble = root.dribbledb
-  , STORAGE_NS       = 'dbd'
-  , local_store
-  ;
-
-// ============================================================= internals ~==
-
-// shortcuts
-local_store = browser_store();
-
-// uri building
 function key(type, base_url) { return STORAGE_NS + ':' + type + ':' + base_url; }
 function global_item_key(type, base_url, id)   {
   if (id !== undefined) {
@@ -851,7 +839,16 @@ function global_item_key(type, base_url, id)   {
 }
 function global_doc_key(base_url, id)   { return global_item_key('d', base_url,  id);  }
 function global_meta_key(base_url, id)   { return global_item_key('m', base_url, id);  }
-function global_since_key(base_url)   { return global_item_key('s', base_url);  }
+function global_since_key(base_url)   { return global_item_key('s', base_url);  }var root             = this
+  , previous_dribble = root.dribbledb
+  , STORAGE_NS       = 'dbd'
+  , local_store
+  ;
+
+// ============================================================= internals ~==
+
+// shortcuts
+local_store = browser_store();
 
 // ================================================================ public ~==
 
