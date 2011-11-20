@@ -153,7 +153,6 @@ var request = (function(exports){
   exports.parse = {
       'application/x-www-form-urlencoded': parseString
     , 'application/json': JSON.parse
-    , 'text/plain': JSON.parse
   };
 
   /**
@@ -293,8 +292,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    console.log('this.contentType:', this.contentType);
-    var parse = exports.parse[this.contentType];
+    var parse = exports.parse[this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
       : null;
@@ -367,7 +365,7 @@ var request = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      var resp = new Response(self.xhr)
+      var resp = new Response(self.xhr, {expectResponseType:self._expectResponseType})
         , err;
 
       if (resp.status === 0) { err = new Error('Unknown XHR Error'); }
@@ -416,6 +414,11 @@ var request = (function(exports){
     this.header[field.toLowerCase()] = val;
     return this;
   };
+  
+  Request.prototype.expectResponseType = function(type) {
+    this._expectResponseType = exports.types[type] || type;
+    return this;
+  }
 
   /**
    * Set Content-Type to `type`, mapping values from `exports.types`.

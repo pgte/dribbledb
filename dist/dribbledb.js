@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sun Nov 20 23:34:28 2011 +0000
+ * BUILD DATE: Sun Nov 20 23:35:59 2011 +0000
  */
 
  (function() {
@@ -226,7 +226,6 @@ var request = (function(exports){
   exports.parse = {
       'application/x-www-form-urlencoded': parseString
     , 'application/json': JSON.parse
-    , 'text/plain': JSON.parse
   };
 
   /**
@@ -366,8 +365,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    console.log('this.contentType:', this.contentType);
-    var parse = exports.parse[this.contentType];
+    var parse = exports.parse[this.options && this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
       : null;
@@ -440,7 +438,7 @@ var request = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      var resp = new Response(self.xhr)
+      var resp = new Response(self.xhr, {expectResponseType:self._expectResponseType})
         , err;
 
       if (resp.status === 0) { err = new Error('Unknown XHR Error'); }
@@ -489,6 +487,11 @@ var request = (function(exports){
     this.header[field.toLowerCase()] = val;
     return this;
   };
+  
+  Request.prototype.expectResponseType = function(type) {
+    this._expectResponseType = exports.types[type] || type;
+    return this;
+  }
 
   /**
    * Set Content-Type to `type`, mapping values from `exports.types`.
@@ -976,7 +979,7 @@ function dribbledb(base_url) {
         var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
         request
           .get(uri)
-          .type('json')
+          .expectResponseType('json')
           .end(function(err, resp) {
             var i, body, results, change, key, theirs, err2, mine;
           

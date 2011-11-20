@@ -135,7 +135,7 @@ function dribbledb(base_url) {
         var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
         request
           .get(uri)
-          .type('json')
+          .expectResponseType('json')
           .end(function(err, resp) {
             var i, body, results, change, key, theirs, err2, mine;
           
