@@ -12,11 +12,12 @@ JS_LINT ?= `which jslint`
 COMPILER = ${JS_ENGINE} ${BUILD_DIR}/uglify.js --unsafe
 BROWSERIFY ?= `which browserify`
 
-BASE_FILES = ${SRC_DIR}/superagent.js\
+BASE_FILES = ${SRC_DIR}/request.js\
 	${SRC_DIR}/dribbledb.js
 
-MODULES = ${SRC_DIR}/intro.js\
-	${BASE_FILES}
+MODULES = ${SRC_DIR}/first.js\
+	${BASE_FILES} \
+	${SRC_DIR}/last.js\
 
 TESTS = ${TEST_DIR}/test.js
 TESTS_MODULES = ${TEST_DIR}/build/intro.js \

@@ -17,3 +17,5 @@
  * VERSION: @VERSION
  * BUILD DATE: @DATE
  */
+
+ (function() {

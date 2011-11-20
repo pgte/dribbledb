@@ -50,35 +50,11 @@ EventEmitter.prototype.emit = function(event){
   return this;
 };
 
-/*!
- * superagent
- * Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>
- * MIT Licensed
- */
-
-var superagent = (function(exports){
-  
-  /**
-   * Expose the request function.
-   */
+var request = (function(exports){
   
   exports = request;
-
-  /**
-   * Library version.
-   */
-
   exports.version = '0.1.1';
-
-  /**
-   * Noop.
-   */
-
   var noop = function(){};
-
-  /**
-   * Determine XHR.
-   */
 
   function getXHR() {
     if (window.XMLHttpRequest
