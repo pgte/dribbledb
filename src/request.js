@@ -292,7 +292,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    var parse = exports.parse[this.options.expectResponseType || this.contentType];
+    var parse = exports.parse[this.options && this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
       : null;

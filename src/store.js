@@ -1,5 +1,5 @@
 // =============================================================== storage ~==
-function browser_store() {
+function store() {
   function browser_get(path) {
     var document = root.localStorage.getItem(path);
     return JSON.parse(document);
@@ -13,12 +13,12 @@ function browser_store() {
   function browser_destroy(path) {
     root.localStorage.removeItem(path);
   }
-  
+
   function browser_all_keys_iterator(path, cb, done) {
     var storage = root.localStorage;
     var i = 0, key;
     (function iterate() {
-      
+
       function next() {
         i ++;
         if (i < storage.length) { iterate(); }
@@ -34,7 +34,7 @@ function browser_store() {
       }
     }());
   }
-  
+
   function browser_all_keys(path) {
     var keys = [];
     browser_all_keys_iterator(path, function(key, value, done) {
@@ -45,7 +45,7 @@ function browser_store() {
   }
 
   if(!root.localStorage) {
-    throw new Error('At the moment this only works in modern browsers'); 
+    throw new Error('At the moment this only works in modern browsers');
   }
   return { get     : browser_get
          , put     : browser_put

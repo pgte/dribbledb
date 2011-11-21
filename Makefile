@@ -14,8 +14,9 @@ BROWSERIFY ?= `which browserify`
 
 BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/request.js\
-	${SRC_DIR}/browser_store.js\
+	${SRC_DIR}/store.js\
 	${SRC_DIR}/keys.js\
+	${SRC_DIR}/uuid.js\
 	${SRC_DIR}/dribbledb.js
 
 MODULES = ${SRC_DIR}/first.js\

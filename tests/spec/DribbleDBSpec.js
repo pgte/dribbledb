@@ -61,6 +61,15 @@ describe('DribbleDB', function() {
     });
   });
 
+  describe("when you have a second db just for yourself", function() {
+    var db = dbd('http://foo.com/posts2');
+    it("should be able to tell me which keys have not yet been synced", function() {
+      var unsynced;
+      var id = db.put(1);
+      expect(db.get(id)).toEqual(1);
+    });
+  });
+
   describe("when you have another db just for yourself where you have overriden request", function() {
     var db = dbd('http://foo.com/syncables');
     

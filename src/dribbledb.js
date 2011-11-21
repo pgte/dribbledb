@@ -1,15 +1,8 @@
 var root             = this
   , previous_dribble = root.dribbledb
   , STORAGE_NS       = 'dbd'
-  , local_store
+  , local_store      = store()
   ;
-
-// ============================================================= internals ~==
-
-// shortcuts
-local_store = browser_store();
-
-// ================================================================ public ~==
 
 function dribbledb(base_url) {
   var that = {}
@@ -25,22 +18,6 @@ function dribbledb(base_url) {
   
   function since_key() {
     return global_since_key(base_url);
-  }
-  
-  function put(key, value, remote) {
-    var uri = doc_key(key);
-    local_store.put(uri, value);
-    if (! remote) { local_store.put(meta_key(key), 'p'); }
-    
-  }
-  
-  function get(key) {
-    return local_store.get(doc_key(key));
-  }
-
-  function destroy(key) {
-    local_store.destroy(doc_key(key));
-    local_store.put(meta_key(key), 'd');
   }
   
   function unsynced_keys() {
@@ -61,7 +38,36 @@ function dribbledb(base_url) {
   }
 
 
+  // ============================= DB manipulation  ~===
+
+  function put(key, value) {
+    if (arguments.length < 2) {
+      value = key;
+      key = value.id || value._id || uuid();
+    }
+    var uri = doc_key(key);
+    local_store.put(uri, value);
+    local_store.put(meta_key(key), 'p');
+    return key;
+  }
+  
+  function remote_put(key, value) {
+    var uri = doc_key(key);
+    local_store.put(uri, value);
+  }
+  
+  function get(key) {
+    return local_store.get(doc_key(key));
+  }
+
+  function destroy(key) {
+    local_store.destroy(doc_key(key));
+    local_store.put(meta_key(key), 'd');
+  }
+  
+
   // ========================================= sync   ~==
+
   sync = (function() {
     var syncEmitter = new EventEmitter();
 
@@ -180,7 +186,7 @@ function dribbledb(base_url) {
                     next();
                   }
                 } else {
-                  put(key, theirs, true);
+                  remote_put(key, theirs);
                   next();
                 }
               } else {
