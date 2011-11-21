@@ -90,6 +90,7 @@ describe('DribbleDB', function() {
         , callback = sinon.spy()
 
       db.put("a", 1);
+      db.put("b", 2);
       db.put("c", 3);
       db.destroy("b");
       db.sync(callback);

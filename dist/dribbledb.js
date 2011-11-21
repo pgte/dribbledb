@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 01:04:35 2011 +0000
+ * BUILD DATE: Mon Nov 21 10:44:14 2011 +0000
  */
 
  (function() {
@@ -801,7 +801,11 @@ function store() {
   }
 
   function browser_destroy(path) {
-    root.localStorage.removeItem(path);
+    if (null !== root.localStorage.getItem(path)) {
+      root.localStorage.removeItem(path);
+      return true;
+    }
+    return false;
   }
 
   function browser_all_keys_iterator(path, cb, done) {
@@ -1133,11 +1137,10 @@ function dribbledb(base_url) {
   function destroy(key) {
     var meta_value = 'd';
     var old = get(key);
-    if (old && old._rev) {
-      meta_value += old._rev;
+    if (old && old._rev) { meta_value += old._rev; }
+    if (local_store.destroy(doc_key(key))) {
+      local_store.put(meta_key(key), meta_value);
     }
-    local_store.destroy(doc_key(key));
-    local_store.put(meta_key(key), meta_value);
   }
 
   function remote_destroy(key) {
@@ -1174,7 +1177,9 @@ function dribbledb(base_url) {
         return false;
       }
       
+
       // === push to remote ~=============
+
       function push_one(key, value, done) {
         var method
           , op = value.charAt(0)
@@ -1189,7 +1194,9 @@ function dribbledb(base_url) {
         
         function handleResponse(err, res) {
           if (err) { return error(err); }
+
           // ======= conflict! ~==
+
           if (res.conflict) {
             remote_get(uri, function(err, resp) {
               if (err) { return error(err); }
@@ -1207,7 +1214,7 @@ function dribbledb(base_url) {
               }
             });
           } else {
-            if (! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
+            if (('del' !== method || ! res.notFound) && ! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
             local_store.destroy(meta_key(key));
             done();
           }
@@ -1216,7 +1223,9 @@ function dribbledb(base_url) {
         remote(method, uri, mine, handleResponse)
       }
       
+
       // === pull from remote ~=============
+
       function pull(cb) {
         var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
         remote_get(uri, function(err, resp) {
@@ -1305,6 +1314,7 @@ function dribbledb(base_url) {
 
 
 // =============================================================== exports ~==
+
 dribbledb.version = '0.1.0';
 if ('function' === typeof(define) && define.amd) {
   define('dribbledb', function() {
@@ -1313,7 +1323,4 @@ if ('function' === typeof(define) && define.amd) {
 } 
 else {
   root.dribbledb = dribbledb;
-}
-// shortcuts
-fn    = dribbledb.fn;
-store = dribbledb.store;}());
+}}());

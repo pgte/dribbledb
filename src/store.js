@@ -11,7 +11,11 @@ function store() {
   }
 
   function browser_destroy(path) {
-    root.localStorage.removeItem(path);
+    if (null !== root.localStorage.getItem(path)) {
+      root.localStorage.removeItem(path);
+      return true;
+    }
+    return false;
   }
 
   function browser_all_keys_iterator(path, cb, done) {
