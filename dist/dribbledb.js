@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 00:38:40 2011 +0000
+ * BUILD DATE: Mon Nov 21 01:04:35 2011 +0000
  */
 
  (function() {
@@ -1131,8 +1131,13 @@ function dribbledb(base_url) {
   }
 
   function destroy(key) {
+    var meta_value = 'd';
+    var old = get(key);
+    if (old && old._rev) {
+      meta_value += old._rev;
+    }
     local_store.destroy(doc_key(key));
-    local_store.put(meta_key(key), 'd');
+    local_store.put(meta_key(key), meta_value);
   }
 
   function remote_destroy(key) {
@@ -1172,11 +1177,15 @@ function dribbledb(base_url) {
       // === push to remote ~=============
       function push_one(key, value, done) {
         var method
+          , op = value.charAt(0)
+          , rev = value.substr(1)
           , mine = get(key)
           , uri = base_url + '/' + key;
         
-        method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
+        method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
         if (! method) { throw new Error('Invalid meta action: ' + value); }
+
+        if (rev) { uri += '?rev=' + rev; }
         
         function handleResponse(err, res) {
           if (err) { return error(err); }
