@@ -35,6 +35,8 @@ function store() {
         } else {
           next();
         }
+      } else {
+        next();
       }
     }());
   }
@@ -48,7 +50,7 @@ function store() {
     return keys;
   }
 
-  if(!root.localStorage) {
+  if(! root.localStorage) {
     throw new Error('At the moment this only works in modern browsers');
   }
   return { get     : browser_get

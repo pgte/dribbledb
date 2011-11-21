@@ -3,9 +3,9 @@
 * Sort out the CORS / JSONP stuff
 * Sync callbacks
 * Synchronization
-* db.all()
 * versioning?
 * db.nuke() -> destroy all docs
 * pagination
 * filtering
 * views (?)
+* what to do if we run out of storage space?

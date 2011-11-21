@@ -73,6 +73,21 @@ function dribbledb(base_url) {
     local_store.destroy(doc_key(key));
   }
   
+  function all(cb, done) {
+    var ret;
+
+    if ('function' !== typeof(cb)) {
+      ret = [];
+      cb = function(key, value, done) {
+        ret.push(value);
+        done();
+      }
+    }
+    
+    local_store.all_keys_iterator(doc_key(), cb, done);
+    return ret;
+  }
+  
 
   // ========================================= sync   ~==
 
@@ -234,6 +249,7 @@ function dribbledb(base_url) {
   that.get = get;
   that.destroy = destroy;
   that.unsynced_keys = unsynced_keys;
+  that.all = all;
   
   return that;
 }

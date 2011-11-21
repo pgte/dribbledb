@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 10:44:14 2011 +0000
+ * BUILD DATE: Mon Nov 21 11:50:06 2011 +0000
  */
 
  (function() {
@@ -825,6 +825,8 @@ function store() {
         } else {
           next();
         }
+      } else {
+        next();
       }
     }());
   }
@@ -838,7 +840,7 @@ function store() {
     return keys;
   }
 
-  if(!root.localStorage) {
+  if(! root.localStorage) {
     throw new Error('At the moment this only works in modern browsers');
   }
   return { get     : browser_get
@@ -1147,6 +1149,21 @@ function dribbledb(base_url) {
     local_store.destroy(doc_key(key));
   }
   
+  function all(cb, done) {
+    var ret;
+
+    if ('function' !== typeof(cb)) {
+      ret = [];
+      cb = function(key, value, done) {
+        ret.push(value);
+        done();
+      }
+    }
+    
+    local_store.all_keys_iterator(doc_key(), cb, done);
+    return ret;
+  }
+  
 
   // ========================================= sync   ~==
 
@@ -1308,6 +1325,7 @@ function dribbledb(base_url) {
   that.get = get;
   that.destroy = destroy;
   that.unsynced_keys = unsynced_keys;
+  that.all = all;
   
   return that;
 }

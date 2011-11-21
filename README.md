@@ -25,6 +25,27 @@ The first and only argument must be the base URL for a RESTful webservice that a
 
     db.destroy('key');
 
+### all:
+
+This returns all stored objects;
+
+    db.all();
+
+You can also iterate on each stored object by using db.all(iterator):
+
+    db.all(function(obj) {
+      console.log('got one object:', obj);
+    });
+
+You can also add a second argument to know when the iteration is finished:
+
+    db.all(function(obj) {
+      console.log('got one object:', obj);
+    }), function() {
+      console.log('iteration ended');
+    });
+
+
 ### sync:
 
     db.sync(function(err) {

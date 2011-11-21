@@ -70,6 +70,57 @@ describe('DribbleDB', function() {
     });
   });
 
+  describe("when you have a shumble db just for yourself", function() {
+    var db = dbd('http://foo.com/shumble');
+    it("it should be able to iterate over all the keys", function() {
+      var all;
+      
+      db.put("a", {a:1});
+      db.put("b", {b:2});
+      db.put("c", {c:3});
+      
+      all = db.all();
+      
+      expect(all).toBeDefined();
+      expect(all).toContain({a:1});
+      
+      (function() {
+        var called = 0;
+        var callback = function(key, value, next) {
+          called += 1;
+          next();
+        }
+        db.all(callback);
+        expect(called).toEqual(3);
+      }());
+
+      (function() {
+        var called = 0
+          , finished = false
+
+        var callback = function(key, value, next) {
+          called += 1;
+          next();
+        }
+        
+        var done = function() { finished = true; }
+        db.all(callback, done);
+        expect(called).toEqual(3);
+        expect(finished).toEqual(true);
+      }());
+
+    });
+  });
+
+  describe("when you have a second db just for yourself", function() {
+    var db = dbd('http://foo.com/posts2');
+    it("should be able to tell me which keys have not yet been synced", function() {
+      var unsynced;
+      var id = db.put(1);
+      expect(db.get(id)).toEqual(1);
+    });
+  });
+
   describe("when you have another db just for yourself where you have overriden request", function() {
     var db = dbd('http://foo.com/syncables');
     
