@@ -64,6 +64,10 @@ function dribbledb(base_url) {
     local_store.destroy(doc_key(key));
     local_store.put(meta_key(key), 'd');
   }
+
+  function remote_destroy(key) {
+    local_store.destroy(doc_key(key));
+  }
   
 
   // ========================================= sync   ~==
@@ -186,7 +190,9 @@ function dribbledb(base_url) {
                     next();
                   }
                 } else {
-                  remote_put(key, theirs);
+                  if (change.deleted) { remote_destroy(key); }
+                  else { remote_put(key, theirs); }
+                  
                   next();
                 }
               } else {

@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sun Nov 20 23:45:18 2011 +0000
+ * BUILD DATE: Mon Nov 21 00:06:11 2011 +0000
  */
 
  (function() {
@@ -1123,6 +1123,10 @@ function dribbledb(base_url) {
     local_store.destroy(doc_key(key));
     local_store.put(meta_key(key), 'd');
   }
+
+  function remote_destroy(key) {
+    local_store.destroy(doc_key(key));
+  }
   
 
   // ========================================= sync   ~==
@@ -1245,7 +1249,9 @@ function dribbledb(base_url) {
                     next();
                   }
                 } else {
-                  remote_put(key, theirs);
+                  if (change.deleted) { remote_destroy(key); }
+                  else { remote_put(key, theirs); }
+                  
                   next();
                 }
               } else {
