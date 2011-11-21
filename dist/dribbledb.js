@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 00:13:43 2011 +0000
+ * BUILD DATE: Mon Nov 21 00:38:40 2011 +0000
  */
 
  (function() {
@@ -307,7 +307,7 @@ var request = (function(exports){
 
   function Response(xhr, options) {
     options = options || {};
-    console.log(options);
+    this.options = options;
     this.xhr = xhr;
     this.text = xhr.responseText;
     this.setStatusProperties(xhr.status);
@@ -366,8 +366,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    console.log('this.options.expectResponseType', this.options && this.options.expectResponseType);
-    var parse = exports.parse[this.options && this.options.expectResponseType || this.contentType];
+    var parse = exports.parse[this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
       : null;
@@ -440,7 +439,6 @@ var request = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
-      console.log('ended. self._expectResponseType = ', self._expectResponseType);
       var resp = new Response(self.xhr, {expectResponseType:self._expectResponseType})
         , err;
 
@@ -493,7 +491,6 @@ var request = (function(exports){
   
   Request.prototype.expectResponseType = function(type) {
     this._expectResponseType = exports.types[type] || type;
-    console.log('setting _expectResponseType:', this._expectResponseType);
     return this;
   }
 
@@ -782,11 +779,8 @@ var request = (function(exports){
   return exports;
   
 }({}));function remote(method, uri, body, cb) {
-  if ('function' === typeof(arguments[2])) {
-    cb = body
-    body = undefined;
-  }
-  request[method](uri)
+  if ('function' === typeof(arguments[2])) { cb = body; body = undefined; }
+  request[method](uri, body)
     .expectResponseType('json')
     .end(cb);
 }
@@ -1204,6 +1198,7 @@ function dribbledb(base_url) {
               }
             });
           } else {
+            if (! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
             local_store.destroy(meta_key(key));
             done();
           }
@@ -1273,7 +1268,8 @@ function dribbledb(base_url) {
           });
       }
       
-      unsynced_keys_iterator(push_one, function() {
+      unsynced_keys_iterator(push_one, function(err) {
+        if (err) { return error(err); }
         pull(function(err) {
           if (err) { return error(err); }
           callback();
@@ -1284,10 +1280,7 @@ function dribbledb(base_url) {
     sync.on = function() {
       syncEmitter.on.apply(syncEmitter, arguments);
     };
-    sync.emit = function() {
-      syncEmitter.emit.apply(syncEmitter, arguments);
-    };
-    
+
     return sync;
     
   }());

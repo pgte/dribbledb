@@ -95,7 +95,7 @@ describe('DribbleDB', function() {
       db.sync(callback);
       for(var i = 0; i < 4; i ++) {
         expect(this.requests.length).toEqual(i + 1);
-        this.requests[i].respond(201, {}, '');
+        this.requests[i].respond(201, {}, '{}');
       }
       expect(callback.calledWith()).toEqual(true);
       expect(db.unsynced_keys.length).toEqual(0);
@@ -126,7 +126,7 @@ describe('DribbleDB', function() {
       
       expect(callback.callCount).toEqual(0);
       expect(this.requests.length).toEqual(1);
-      this.requests[0].respond(409, {}, '');
+      this.requests[0].respond(409, {}, '{}');
       expect(this.requests.length).toEqual(2);
       this.requests[1].respond(200, {'Content-Type': 'application/json'}, '2');
       expect(callback.called).toEqual(true);
@@ -168,13 +168,13 @@ describe('DribbleDB', function() {
       
       expect(callback.callCount).toEqual(0);
       expect(this.requests.length).toEqual(1);
-      this.requests[0].respond(409, {}, '');
+      this.requests[0].respond(409, {}, '{}');
       expect(this.requests.length).toEqual(2);
       this.requests[1].respond(200, {'Content-Type': 'application/json'}, '2');
       expect(resolveConflictCalled).toEqual(true);
 
       expect(this.requests.length).toEqual(3);
-      this.requests[2].respond(201, {}, '');
+      this.requests[2].respond(201, {}, '{}');
 
       expect(this.requests.length).toEqual(4);
       this.requests[3].respond(200, {'Content-Type': 'application/json'}, '{"results":[], "last_seq":0}');

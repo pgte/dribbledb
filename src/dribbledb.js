@@ -128,6 +128,7 @@ function dribbledb(base_url) {
               }
             });
           } else {
+            if (! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
             local_store.destroy(meta_key(key));
             done();
           }
@@ -197,7 +198,8 @@ function dribbledb(base_url) {
           });
       }
       
-      unsynced_keys_iterator(push_one, function() {
+      unsynced_keys_iterator(push_one, function(err) {
+        if (err) { return error(err); }
         pull(function(err) {
           if (err) { return error(err); }
           callback();
@@ -208,10 +210,7 @@ function dribbledb(base_url) {
     sync.on = function() {
       syncEmitter.on.apply(syncEmitter, arguments);
     };
-    sync.emit = function() {
-      syncEmitter.emit.apply(syncEmitter, arguments);
-    };
-    
+
     return sync;
     
   }());
