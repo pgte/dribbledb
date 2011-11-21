@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 00:06:11 2011 +0000
+ * BUILD DATE: Mon Nov 21 00:13:43 2011 +0000
  */
 
  (function() {
@@ -307,6 +307,7 @@ var request = (function(exports){
 
   function Response(xhr, options) {
     options = options || {};
+    console.log(options);
     this.xhr = xhr;
     this.text = xhr.responseText;
     this.setStatusProperties(xhr.status);
@@ -365,6 +366,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
+    console.log('this.options.expectResponseType', this.options && this.options.expectResponseType);
     var parse = exports.parse[this.options && this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
@@ -438,6 +440,7 @@ var request = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
+      console.log('ended. self._expectResponseType = ', self._expectResponseType);
       var resp = new Response(self.xhr, {expectResponseType:self._expectResponseType})
         , err;
 
@@ -490,6 +493,7 @@ var request = (function(exports){
   
   Request.prototype.expectResponseType = function(type) {
     this._expectResponseType = exports.types[type] || type;
+    console.log('setting _expectResponseType:', this._expectResponseType);
     return this;
   }
 
@@ -777,7 +781,20 @@ var request = (function(exports){
 
   return exports;
   
-}({}));// =============================================================== storage ~==
+}({}));function remote(method, uri, body, cb) {
+  if ('function' === typeof(arguments[2])) {
+    cb = body
+    body = undefined;
+  }
+  request[method](uri)
+    .expectResponseType('json')
+    .end(cb);
+}
+function remote_get(uri, cb) {
+  remote('get', uri, undefined, cb);
+}
+
+// =============================================================== storage ~==
 function store() {
   function browser_get(path) {
     var document = root.localStorage.getItem(path);
@@ -1162,19 +1179,16 @@ function dribbledb(base_url) {
       function push_one(key, value, done) {
         var method
           , mine = get(key)
-          , uri = base_url + '/' + key
-          , remoteArgs = [];
+          , uri = base_url + '/' + key;
         
-        remoteArgs.push(uri);
         method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
         if (! method) { throw new Error('Invalid meta action: ' + value); }
-        if (method === 'put') { remoteArgs.push(mine); }
         
         function handleResponse(err, res) {
           if (err) { return error(err); }
           // ======= conflict! ~==
           if (res.conflict) {
-            request.get(uri, function(err, resp) {
+            remote_get(uri, function(err, resp) {
               if (err) { return error(err); }
               if (resolveConflicts) {
                 resolveConflicts(mine, resp.body, function(resolved) {
@@ -1195,17 +1209,13 @@ function dribbledb(base_url) {
           }
         }
         
-        remoteArgs.push(handleResponse);
-        request[method].apply(request, remoteArgs);
+        remote(method, uri, mine, handleResponse)
       }
       
       // === pull from remote ~=============
       function pull(cb) {
         var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
-        request
-          .get(uri)
-          .expectResponseType('json')
-          .end(function(err, resp) {
+        remote_get(uri, function(err, resp) {
             var i, body, results, change, key, theirs, err2, mine;
           
             if (err) { return error(err); }

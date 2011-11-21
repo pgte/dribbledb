@@ -234,6 +234,7 @@ var request = (function(exports){
 
   function Response(xhr, options) {
     options = options || {};
+    console.log(options);
     this.xhr = xhr;
     this.text = xhr.responseText;
     this.setStatusProperties(xhr.status);
@@ -292,6 +293,7 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
+    console.log('this.options.expectResponseType', this.options && this.options.expectResponseType);
     var parse = exports.parse[this.options && this.options.expectResponseType || this.contentType];
     return parse
       ? parse(str)
@@ -365,6 +367,7 @@ var request = (function(exports){
     this.header = {};
     this.set('X-Requested-With', 'XMLHttpRequest');
     this.on('end', function(){
+      console.log('ended. self._expectResponseType = ', self._expectResponseType);
       var resp = new Response(self.xhr, {expectResponseType:self._expectResponseType})
         , err;
 
@@ -417,6 +420,7 @@ var request = (function(exports){
   
   Request.prototype.expectResponseType = function(type) {
     this._expectResponseType = exports.types[type] || type;
+    console.log('setting _expectResponseType:', this._expectResponseType);
     return this;
   }
 

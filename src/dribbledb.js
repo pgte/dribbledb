@@ -103,19 +103,16 @@ function dribbledb(base_url) {
       function push_one(key, value, done) {
         var method
           , mine = get(key)
-          , uri = base_url + '/' + key
-          , remoteArgs = [];
+          , uri = base_url + '/' + key;
         
-        remoteArgs.push(uri);
         method = value === 'p' ? 'put' : (value === 'd' ? 'del' : undefined);
         if (! method) { throw new Error('Invalid meta action: ' + value); }
-        if (method === 'put') { remoteArgs.push(mine); }
         
         function handleResponse(err, res) {
           if (err) { return error(err); }
           // ======= conflict! ~==
           if (res.conflict) {
-            request.get(uri, function(err, resp) {
+            remote_get(uri, function(err, resp) {
               if (err) { return error(err); }
               if (resolveConflicts) {
                 resolveConflicts(mine, resp.body, function(resolved) {
@@ -136,17 +133,13 @@ function dribbledb(base_url) {
           }
         }
         
-        remoteArgs.push(handleResponse);
-        request[method].apply(request, remoteArgs);
+        remote(method, uri, mine, handleResponse)
       }
       
       // === pull from remote ~=============
       function pull(cb) {
         var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
-        request
-          .get(uri)
-          .expectResponseType('json')
-          .end(function(err, resp) {
+        remote_get(uri, function(err, resp) {
             var i, body, results, change, key, theirs, err2, mine;
           
             if (err) { return error(err); }
