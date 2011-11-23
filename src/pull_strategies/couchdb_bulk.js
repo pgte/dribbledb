@@ -1,4 +1,4 @@
-function pull_strategy_couchdb_bulk(base_url, pulled_since, get, put, remote_put, remote_destroy, meta_key) {
+function pull_strategy_couchdb_bulk() {
   var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true';
   return function(cb) {
     var calledback = false;
