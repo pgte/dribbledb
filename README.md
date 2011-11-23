@@ -16,10 +16,10 @@ You can also pass some options on the second argument like this:
   * couchdb_bulk: Use CouchDB-like _changes feed (server should accept since=x querystring argument)
 * push_strategy
   * restful_ajax: Use RESTful webservice that obey this scheme:
-      PUT http://myhost.com/posts
-      GET http://myhost.com/posts/1
-      POST http://myhost.com/posts/1
-      DELETE http://myhost.com/posts/1
+    * PUT http://myhost.com/posts
+    * GET http://myhost.com/posts/1
+    * POST http://myhost.com/posts/1
+    * DELETE http://myhost.com/posts/1
 
 ### put:
 
