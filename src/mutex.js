@@ -1,4 +1,4 @@
-return function Mutex() {
+function Mutex() {
   var locked = false
     , _queue = [];
   
@@ -14,9 +14,12 @@ return function Mutex() {
   }
   
   function _do(command) {
+    console.log('doing');
     locked = true;
-    command(function() {
+    command(function(done) {
+      console.log('done'); 
       locked = false;
+      if ('function' === typeof(done)) { done(); }
       dequeue();
     });
   }
@@ -29,5 +32,5 @@ return function Mutex() {
     }
   }
 
-  return sync;
+  return { sync: sync };
 }

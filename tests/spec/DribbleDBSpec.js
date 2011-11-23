@@ -111,6 +111,24 @@ describe('DribbleDB', function() {
 
     });
   });
+  
+  describe("when you have a shumble 2 db just for yourself", function() {
+    var db = dbd('http://foo.com/shumble2');
+    it("it should be able to nuke everything", function() {
+      var all;
+      
+      db.put("a", {a:1});
+      db.put("b", {b:2});
+      db.put("c", {c:3});
+      
+      expect(db.nuke()).toEqual(true);
+      
+      console.log('nuked');
+      expect(db.all().length).toEqual(0);
+      
+      expect(db.unsynced_keys.length).toEqual(0);
+    });
+  });
 
   describe("when you have a second db just for yourself", function() {
     var db = dbd('http://foo.com/posts2');

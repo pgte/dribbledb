@@ -45,6 +45,12 @@ You can also add a second argument to know when the iteration is finished:
       console.log('iteration ended');
     });
 
+### nuke:
+
+Remove the entire database, but just locally.
+Also removes all syncing pending stuff, so your remote object don't get removed.
+
+    db.nuke();
 
 ### sync:
 

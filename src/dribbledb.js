@@ -11,7 +11,7 @@ function dribbledb(base_url) {
   function doc_key(id) {
     return global_doc_key(base_url, id);
   }
-
+  
   function meta_key(id) {
     return global_meta_key(base_url, id);
   }
@@ -81,11 +81,21 @@ function dribbledb(base_url) {
       cb = function(key, value, done) {
         ret.push(value);
         done();
-      }
+      };
     }
     
     local_store.all_keys_iterator(doc_key(), cb, done);
     return ret;
+  }
+  
+  function nuke() {
+    local_store.all_keys(doc_key()).forEach(function(key) {
+      local_store.destroy(doc_key(key));
+    });
+    local_store.all_keys(meta_key()).forEach(function(key) {
+      local_store.destroy(meta_key(key));
+    });
+    return true;
   }
   
 
@@ -161,7 +171,7 @@ function dribbledb(base_url) {
           }
         }
         
-        remote(method, uri, mine, handleResponse)
+        remote(method, uri, mine, handleResponse);
       }
       
 
@@ -250,6 +260,7 @@ function dribbledb(base_url) {
   that.destroy = destroy;
   that.unsynced_keys = unsynced_keys;
   that.all = all;
+  that.nuke = nuke;
   
   return that;
 }

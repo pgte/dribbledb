@@ -1,10 +1,11 @@
-function key(type, base_url) { return STORAGE_NS + ':' + type + ':' + base_url; }
-function global_item_key(type, base_url, id)   {
+// function key(base_url, type) { return STORAGE_NS + ':' + base_url + ':' + type; }
+function key(base_url, type) { return STORAGE_NS + ':' + type + ':' + base_url; }
+function global_item_key(base_url, type, id)   {
   if (id !== undefined) {
     base_url += ('/' + id);
   }
-  return key(type,  base_url);
+  return key(base_url, type);
 }
-function global_doc_key(base_url, id)   { return global_item_key('d', base_url,  id);  }
-function global_meta_key(base_url, id)   { return global_item_key('m', base_url, id);  }
-function global_since_key(base_url)   { return global_item_key('s', base_url);  }
+function global_doc_key(base_url, id)   { return global_item_key(base_url, 'd',  id);  }
+function global_meta_key(base_url, id)   { return global_item_key(base_url, 'm', id);  }
+function global_since_key(base_url)   { return global_item_key(base_url, 's');  }

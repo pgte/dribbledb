@@ -19,25 +19,37 @@ function store() {
   }
 
   function browser_all_keys_iterator(path, cb, done) {
-    var storage = root.localStorage;
-    var i = 0, key;
+    var storage = root.localStorage
+      , keys, i = 0;
+
+    done = done || noop;
+
+    keys = (function() {
+      var key
+        , i
+        , keys = [];
+
+      for(i = 0; i < storage.length; i ++) {
+        key = storage.key(i);
+        if (key && 0 === key.indexOf(path)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    }());
+    
     (function iterate() {
+      var key;
+
+      if (i >= keys.length) { return done(); }
 
       function next() {
         i ++;
-        if (i < storage.length) { iterate(); }
-        else { if (done) { done(); } }
+        iterate();
       }
-      key = storage.key(i);
-      if (key) {
-        if (0 === key.indexOf(path)) {
-          cb(key.slice(path.length + 1), browser_get(key), next);
-        } else {
-          next();
-        }
-      } else {
-        next();
-      }
+
+      key = keys[i];
+      cb(key.slice(path.length + 1), browser_get(key), next);
     }());
   }
 
