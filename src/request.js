@@ -293,10 +293,8 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    var parse = exports.parse[this.options.expectResponseType || this.contentType];
-    return parse
-      ? parse(str)
-      : null;
+    var parse = exports.parse[this.ok && this.options.expectResponseType || this.contentType];
+    return parse ? parse(str) : null;
   };
 
   /**

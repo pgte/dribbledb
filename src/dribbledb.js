@@ -4,10 +4,16 @@ var root             = this
   , local_store      = store()
   ;
 
-function dribbledb(base_url) {
+function dribbledb(base_url, options) {
   var that = {}
-    , sync;
+    , sync
+    , pull_strategy;
+
+  options = options || {};
+  options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
   
+  pull_strategy = resolve_pull_strategy(options.pull_strategy) (base_url, pulled_since, get, put, remote_put, remote_destroy, meta_key);
+
   function doc_key(id) {
     return global_doc_key(base_url, id);
   }
@@ -178,63 +184,7 @@ function dribbledb(base_url) {
       // === pull from remote ~=============
 
       function pull(cb) {
-        var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
-        remote_get(uri, function(err, resp) {
-            var i, body, results, change, key, theirs, err2, mine;
-          
-            if (err) { return error(err); }
-            if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
-            if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
-            body = resp.body;
-            if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
-            if (! body.hasOwnProperty('last_seq')) {
-              err2 = new Error('response body does not have .last_seq: ' + uri);
-              err2.body = body;
-              return cb(err2);
-            }
-            if (! body.hasOwnProperty('results')) {
-              err2 = new Error('response body does not have .results: ' + uri);
-              err2.body = body;
-              return cb(err2);
-            }
-
-            results = body.results;
-            i = -1;
-
-            (function next() {
-              i += 1;
-              if (i < results.length) {
-                change = results[i];
-                key = change.id;
-                theirs = change.doc;
-                if (get(meta_key(key))) {
-                  if (resolveConflicts) {
-                    mine = get(doc_key(key));
-                    resolveConflicts(mine, theirs, function(resolved) {
-                      put(key, resolved);
-                      next();
-                    });
-                  } else {
-                    err2 = new Error('Conflict');
-                    err2.key = key;
-                    err2.mine = mine;
-                    err2.theirs = theirs;
-                    error(err2);
-                    next();
-                  }
-                } else {
-                  if (change.deleted) { remote_destroy(key); }
-                  else { remote_put(key, theirs); }
-                  
-                  next();
-                }
-              } else {
-                // finished
-                pulled_since(body.last_seq);
-                cb();
-              }
-            }());
-          });
+        pull_strategy(cb);
       }
       
       unsynced_keys_iterator(push_one, function(err) {

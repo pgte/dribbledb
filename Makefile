@@ -19,6 +19,8 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/store.js\
 	${SRC_DIR}/keys.js\
 	${SRC_DIR}/uuid.js\
+	${SRC_DIR}/pull_strategies.js\
+	${SRC_DIR}/pull_strategies/couchdb_bulk.js\
 	${SRC_DIR}/dribbledb.js
 
 MODULES = ${SRC_DIR}/first.js\

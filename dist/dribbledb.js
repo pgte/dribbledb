@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 21 12:29:39 2011 +0000
+ * BUILD DATE: Wed Nov 23 15:16:07 2011 +0000
  */
 
  (function() {
@@ -366,10 +366,8 @@ var request = (function(exports){
    */
 
   Response.prototype.parseBody = function(str){
-    var parse = exports.parse[this.options.expectResponseType || this.contentType];
-    return parse
-      ? parse(str)
-      : null;
+    var parse = exports.parse[this.ok && this.options.expectResponseType || this.contentType];
+    return parse ? parse(str) : null;
   };
 
   /**
@@ -781,6 +779,7 @@ var request = (function(exports){
 }({}));function noop() {};function remote(method, uri, body, cb) {
   if ('function' === typeof(arguments[2])) { cb = body; body = undefined; }
   request[method](uri, body)
+    .type('application/javascript')
     .expectResponseType('json')
     .end(cb);
 }
@@ -827,9 +826,6 @@ function store() {
       }
       return keys;
     }());
-    
-    console.log('iterating over keys: ', keys);
-    console.log('i', i);
     
     (function iterate() {
       var key;
@@ -1090,16 +1086,116 @@ function global_since_key(base_url)   { return global_item_key(base_url, 's');  
   } else {
     return uuid;
   }
-}()).v4;var root             = this
+}()).v4;function resolve_pull_strategy(strat_name) {
+  var strat;
+  if ('function' === typeof(strat_name)) { strat = strat_name; }
+  else {
+    switch(strat_name) {
+      case 'couchdb_bulk':
+        strat = pull_strategy_couchdb_bulk;
+      break;
+      default:
+        throw new Error('Unknown pull strategy: ' + strat_name);
+    }
+  }
+  return strat;
+}function pull_strategy_couchdb_bulk(base_url, pulled_since, get, put, remote_put, remote_destroy, meta_key) {
+  var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true';
+  return function(cb) {
+    var calledback = false;
+    
+    function callback() {
+      if (! calledback && typeof(cb) === 'function') {
+        calledback = true;
+        cb.apply(this, arguments);
+        return true;
+      }
+      return false;
+    }
+    
+    function error(err) {
+      if (err) {
+        if (! callback(err)) {
+          syncEmitter.emit('error', err);
+        }
+        return true;
+      }
+      return false;
+    }
+    
+    remote_get(uri, function(err, resp) {
+        var i, body, results, change, key, theirs, err2, mine;
+
+        if (err) { return error(err); }
+        if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
+        if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
+        body = resp.body;
+        if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
+        if (! body.hasOwnProperty('last_seq')) {
+          err2 = new Error('response body does not have .last_seq: ' + uri);
+          err2.body = body;
+          return cb(err2);
+        }
+        if (! body.hasOwnProperty('results')) {
+          err2 = new Error('response body does not have .results: ' + uri);
+          err2.body = body;
+          return cb(err2);
+        }
+
+        results = body.results;
+        i = -1;
+
+        (function next() {
+          i += 1;
+          if (i < results.length) {
+            change = results[i];
+            key = change.id;
+            theirs = change.doc;
+            if (get(meta_key(key))) {
+              if (resolveConflicts) {
+                mine = get(doc_key(key));
+                resolveConflicts(mine, theirs, function(resolved) {
+                  put(key, resolved);
+                  next();
+                });
+              } else {
+                err2 = new Error('Conflict');
+                err2.key = key;
+                err2.mine = mine;
+                err2.theirs = theirs;
+                error(err2);
+                next();
+              }
+            } else {
+              if (change.deleted) { remote_destroy(key); }
+              else { remote_put(key, theirs); }
+
+              next();
+            }
+          } else {
+            // finished
+            pulled_since(body.last_seq);
+            cb();
+          }
+        }());
+      });
+  }
+};var root             = this
   , previous_dribble = root.dribbledb
   , STORAGE_NS       = 'dbd'
   , local_store      = store()
   ;
 
-function dribbledb(base_url) {
+function dribbledb(base_url, options) {
   var that = {}
-    , sync;
+    , sync
+    , pull_strategy;
+
+  options = options || {};
+  options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
   
+  pull_strategy = resolve_pull_strategy(options.pull_strategy) (base_url, pulled_since, get, put, remote_put, remote_destroy, meta_key);
+
   function doc_key(id) {
     return global_doc_key(base_url, id);
   }
@@ -1270,63 +1366,7 @@ function dribbledb(base_url) {
       // === pull from remote ~=============
 
       function pull(cb) {
-        var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true&force_json=true';
-        remote_get(uri, function(err, resp) {
-            var i, body, results, change, key, theirs, err2, mine;
-          
-            if (err) { return error(err); }
-            if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
-            if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
-            body = resp.body;
-            if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
-            if (! body.hasOwnProperty('last_seq')) {
-              err2 = new Error('response body does not have .last_seq: ' + uri);
-              err2.body = body;
-              return cb(err2);
-            }
-            if (! body.hasOwnProperty('results')) {
-              err2 = new Error('response body does not have .results: ' + uri);
-              err2.body = body;
-              return cb(err2);
-            }
-
-            results = body.results;
-            i = -1;
-
-            (function next() {
-              i += 1;
-              if (i < results.length) {
-                change = results[i];
-                key = change.id;
-                theirs = change.doc;
-                if (get(meta_key(key))) {
-                  if (resolveConflicts) {
-                    mine = get(doc_key(key));
-                    resolveConflicts(mine, theirs, function(resolved) {
-                      put(key, resolved);
-                      next();
-                    });
-                  } else {
-                    err2 = new Error('Conflict');
-                    err2.key = key;
-                    err2.mine = mine;
-                    err2.theirs = theirs;
-                    error(err2);
-                    next();
-                  }
-                } else {
-                  if (change.deleted) { remote_destroy(key); }
-                  else { remote_put(key, theirs); }
-                  
-                  next();
-                }
-              } else {
-                // finished
-                pulled_since(body.last_seq);
-                cb();
-              }
-            }());
-          });
+        pull_strategy(cb);
       }
       
       unsynced_keys_iterator(push_one, function(err) {
