@@ -37,6 +37,14 @@ You can also pass some options on the second argument like this:
 
     db.put('key', 'value');
 
+Or you can just provide the value:
+
+    db.put(obj);
+
+If `obj` has an `_id` or `id` attribute, then no new value is created.
+
+If it does not, a new ID is created (using node-uuid).
+
 ### get:
 
     var value = db.get('key');
