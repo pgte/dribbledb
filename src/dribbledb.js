@@ -1,9 +1,13 @@
 var that
   , sync
+  , store
   , pull_strategy
   , push_strategy;
 
 options = options || {};
+
+options.storage_strategy = options.storage_strategy || 'localstore';
+store = resolve_storage_strategy(options.storage_strategy) ();
 
 options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
@@ -24,19 +28,19 @@ function since_key() {
 }
 
 function unsynced_keys() {
-  return local_store.all_keys(meta_key());
+  return store.all_keys(meta_key());
 }
 
 function unsynced_keys_iterator(cb, done) {
-  local_store.all_keys_iterator(meta_key(), cb, done);
+  store.all_keys_iterator(meta_key(), cb, done);
 }
 
 function pulled_since(val) {
   var key = since_key();
   if (! val) {
-    return local_store.get(key) || 0;
+    return store.get(key) || 0;
   } else {
-    local_store.put(key, val);
+    store.put(key, val);
   }
 }
 
@@ -49,31 +53,31 @@ function put(key, value) {
     key = value.id || value._id || uuid();
   }
   var uri = doc_key(key);
-  local_store.put(uri, value);
-  local_store.put(meta_key(key), 'p');
+  store.put(uri, value);
+  store.put(meta_key(key), 'p');
   return key;
 }
 
 function remote_put(key, value) {
   var uri = doc_key(key);
-  local_store.put(uri, value);
+  store.put(uri, value);
 }
 
 function get(key) {
-  return local_store.get(doc_key(key));
+  return store.get(doc_key(key));
 }
 
 function destroy(key) {
   var meta_value = 'd';
   var old = get(key);
   if (old && old._rev) { meta_value += old._rev; }
-  if (local_store.destroy(doc_key(key))) {
-    local_store.put(meta_key(key), meta_value);
+  if (store.destroy(doc_key(key))) {
+    store.put(meta_key(key), meta_value);
   }
 }
 
 function remote_destroy(key) {
-  local_store.destroy(doc_key(key));
+  store.destroy(doc_key(key));
 }
 
 function all(cb, done) {
@@ -87,16 +91,16 @@ function all(cb, done) {
     };
   }
   
-  local_store.all_keys_iterator(doc_key(), cb, done);
+  store.all_keys_iterator(doc_key(), cb, done);
   return ret;
 }
 
 function nuke() {
-  local_store.all_keys(doc_key()).forEach(function(key) {
-    local_store.destroy(doc_key(key));
+  store.all_keys(doc_key()).forEach(function(key) {
+    store.destroy(doc_key(key));
   });
-  local_store.all_keys(meta_key()).forEach(function(key) {
-    local_store.destroy(meta_key(key));
+  store.all_keys(meta_key()).forEach(function(key) {
+    store.destroy(meta_key(key));
   });
   return true;
 }

@@ -12,10 +12,12 @@ You can also pass some options on the second argument like this:
 
 #### Options:
 
+* store_strategy:
+  * localstore (default) : Use localstore
 * pull_strategy: can take any of the following values:
-  * couchdb_bulk: Use CouchDB-like _changes feed (server should accept since=x querystring argument)
+  * couchdb_bulk (default) : Use CouchDB-like _changes feed (server should accept since=x querystring argument)
 * push_strategy
-  * restful_ajax: Use RESTful webservice that obey this scheme:
+  * restful_ajax : Use RESTful webservice that obey this scheme:
     * PUT http://myhost.com/posts
     * GET http://myhost.com/posts/1
     * POST http://myhost.com/posts/1

@@ -39,7 +39,7 @@ function push_strategy_restful_ajax() {
           });
         } else {
           if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          local_store.destroy(meta_key(key));
+          store.destroy(meta_key(key));
           done();
         }
       }

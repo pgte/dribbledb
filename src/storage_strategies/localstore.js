@@ -1,5 +1,5 @@
 // =============================================================== storage ~==
-function store() {
+function store_strategy_localstore() {
   function browser_get(path) {
     var document = root.localStorage.getItem(path);
     return JSON.parse(document);

@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Wed Nov 23 18:52:51 2011 +0000
+ * BUILD DATE: Thu Nov 24 10:46:44 2011 +0000
  */
 
  (function() {
@@ -787,80 +787,6 @@ function remote_get(uri, cb) {
   remote('get', uri, undefined, cb);
 }
 
-// =============================================================== storage ~==
-function store() {
-  function browser_get(path) {
-    var document = root.localStorage.getItem(path);
-    return JSON.parse(document);
-  }
-
-  function browser_put(path, document) {
-    document = JSON.stringify(document);
-    root.localStorage.setItem(path, document);
-  }
-
-  function browser_destroy(path) {
-    if (null !== root.localStorage.getItem(path)) {
-      root.localStorage.removeItem(path);
-      return true;
-    }
-    return false;
-  }
-
-  function browser_all_keys_iterator(path, cb, done) {
-    var storage = root.localStorage
-      , keys, i = 0;
-
-    done = done || noop;
-
-    keys = (function() {
-      var key
-        , i
-        , keys = [];
-
-      for(i = 0; i < storage.length; i ++) {
-        key = storage.key(i);
-        if (key && 0 === key.indexOf(path)) {
-          keys.push(key);
-        }
-      }
-      return keys;
-    }());
-    
-    (function iterate() {
-      var key;
-
-      if (i >= keys.length) { return done(); }
-
-      function next() {
-        i ++;
-        iterate();
-      }
-
-      key = keys[i];
-      cb(key.slice(path.length + 1), browser_get(key), next);
-    }());
-  }
-
-  function browser_all_keys(path) {
-    var keys = [];
-    browser_all_keys_iterator(path, function(key, value, done) {
-      keys.push(key);
-      done();
-    });
-    return keys;
-  }
-
-  if(! root.localStorage) {
-    throw new Error('At the moment this only works in modern browsers');
-  }
-  return { get     : browser_get
-         , put     : browser_put
-         , destroy : browser_destroy
-         , all_keys_iterator: browser_all_keys_iterator
-         , all_keys: browser_all_keys
-         };
-}
 // function key(base_url, type) { return STORAGE_NS + ':' + base_url + ':' + type; }
 function key(base_url, type) { return STORAGE_NS + ':' + type + ':' + base_url; }
 function global_item_key(base_url, type, id)   {
@@ -1089,10 +1015,96 @@ function global_since_key(base_url)   { return global_item_key(base_url, 's');  
 }()).v4;var root             = this
   , previous_dribble = root.dribbledb
   , STORAGE_NS       = 'dbd'
-  , local_store      = store()
   ;
 
-function dribbledb(base_url, options) {function resolve_pull_strategy(strat_name) {
+function dribbledb(base_url, options) {function resolve_storage_strategy(strat_name) {
+  var strat;
+  if ('function' === typeof(strat_name)) { strat = strat_name; }
+  else {
+    switch(strat_name) {
+      case 'localstore':
+        strat = store_strategy_localstore;
+      break;
+      default:
+        throw new Error('Unknown store strategy: ' + strat_name);
+    }
+  }
+  return strat;
+}// =============================================================== storage ~==
+function store_strategy_localstore() {
+  function browser_get(path) {
+    var document = root.localStorage.getItem(path);
+    return JSON.parse(document);
+  }
+
+  function browser_put(path, document) {
+    document = JSON.stringify(document);
+    root.localStorage.setItem(path, document);
+  }
+
+  function browser_destroy(path) {
+    if (null !== root.localStorage.getItem(path)) {
+      root.localStorage.removeItem(path);
+      return true;
+    }
+    return false;
+  }
+
+  function browser_all_keys_iterator(path, cb, done) {
+    var storage = root.localStorage
+      , keys, i = 0;
+
+    done = done || noop;
+
+    keys = (function() {
+      var key
+        , i
+        , keys = [];
+
+      for(i = 0; i < storage.length; i ++) {
+        key = storage.key(i);
+        if (key && 0 === key.indexOf(path)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    }());
+    
+    (function iterate() {
+      var key;
+
+      if (i >= keys.length) { return done(); }
+
+      function next() {
+        i ++;
+        iterate();
+      }
+
+      key = keys[i];
+      cb(key.slice(path.length + 1), browser_get(key), next);
+    }());
+  }
+
+  function browser_all_keys(path) {
+    var keys = [];
+    browser_all_keys_iterator(path, function(key, value, done) {
+      keys.push(key);
+      done();
+    });
+    return keys;
+  }
+
+  if(! root.localStorage) {
+    throw new Error('At the moment this only works in modern browsers');
+  }
+  return { get     : browser_get
+         , put     : browser_put
+         , destroy : browser_destroy
+         , all_keys_iterator: browser_all_keys_iterator
+         , all_keys: browser_all_keys
+         };
+}
+function resolve_pull_strategy(strat_name) {
   var strat;
   if ('function' === typeof(strat_name)) { strat = strat_name; }
   else {
@@ -1221,7 +1233,7 @@ function resolve_push_strategy(strat_name) {
           });
         } else {
           if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          local_store.destroy(meta_key(key));
+          store.destroy(meta_key(key));
           done();
         }
       }
@@ -1235,10 +1247,14 @@ function resolve_push_strategy(strat_name) {
 }
 var that
   , sync
+  , store
   , pull_strategy
   , push_strategy;
 
 options = options || {};
+
+options.storage_strategy = options.storage_strategy || 'localstore';
+store = resolve_storage_strategy(options.storage_strategy) ();
 
 options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
@@ -1259,19 +1275,19 @@ function since_key() {
 }
 
 function unsynced_keys() {
-  return local_store.all_keys(meta_key());
+  return store.all_keys(meta_key());
 }
 
 function unsynced_keys_iterator(cb, done) {
-  local_store.all_keys_iterator(meta_key(), cb, done);
+  store.all_keys_iterator(meta_key(), cb, done);
 }
 
 function pulled_since(val) {
   var key = since_key();
   if (! val) {
-    return local_store.get(key) || 0;
+    return store.get(key) || 0;
   } else {
-    local_store.put(key, val);
+    store.put(key, val);
   }
 }
 
@@ -1284,31 +1300,31 @@ function put(key, value) {
     key = value.id || value._id || uuid();
   }
   var uri = doc_key(key);
-  local_store.put(uri, value);
-  local_store.put(meta_key(key), 'p');
+  store.put(uri, value);
+  store.put(meta_key(key), 'p');
   return key;
 }
 
 function remote_put(key, value) {
   var uri = doc_key(key);
-  local_store.put(uri, value);
+  store.put(uri, value);
 }
 
 function get(key) {
-  return local_store.get(doc_key(key));
+  return store.get(doc_key(key));
 }
 
 function destroy(key) {
   var meta_value = 'd';
   var old = get(key);
   if (old && old._rev) { meta_value += old._rev; }
-  if (local_store.destroy(doc_key(key))) {
-    local_store.put(meta_key(key), meta_value);
+  if (store.destroy(doc_key(key))) {
+    store.put(meta_key(key), meta_value);
   }
 }
 
 function remote_destroy(key) {
-  local_store.destroy(doc_key(key));
+  store.destroy(doc_key(key));
 }
 
 function all(cb, done) {
@@ -1322,16 +1338,16 @@ function all(cb, done) {
     };
   }
   
-  local_store.all_keys_iterator(doc_key(), cb, done);
+  store.all_keys_iterator(doc_key(), cb, done);
   return ret;
 }
 
 function nuke() {
-  local_store.all_keys(doc_key()).forEach(function(key) {
-    local_store.destroy(doc_key(key));
+  store.all_keys(doc_key()).forEach(function(key) {
+    store.destroy(doc_key(key));
   });
-  local_store.all_keys(meta_key()).forEach(function(key) {
-    local_store.destroy(meta_key(key));
+  store.all_keys(meta_key()).forEach(function(key) {
+    store.destroy(meta_key(key));
   });
   return true;
 }
