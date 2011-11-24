@@ -14,6 +14,10 @@ describe('DribbleDB', function() {
     expect(dbd).toBeDefined();
   });
   
+  it("should support feature detection", function() {
+    expect(dbd.supportedStorageStrategies()).toEqual(['localstore']);
+  });
+  
   it("should have a version number", function() {
     expect(dbd.version).toBeDefined();
     expect(dbd.version).toNotEqual('@VERSION');

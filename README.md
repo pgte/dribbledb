@@ -1,4 +1,10 @@
-# dribbledb
+# DribbleDB
+
+DribbleDB is a browser local store capable of remote syncing.
+
+It supports several storage strategies and remote pushing and pulling strategies.
+
+It works with CouchDB-style APIs and a lot more to come.
 
 ## API
 
@@ -22,6 +28,10 @@ You can also pass some options on the second argument like this:
     * GET http://myhost.com/posts/1
     * POST http://myhost.com/posts/1
     * DELETE http://myhost.com/posts/1
+
+(For browser compatibility see the feature detection section below).
+
+## Storage API
 
 ### put:
 
@@ -123,3 +133,16 @@ The 3rd argument contains the remote operation and can have the following values
 * "updated"
 * "inserted"
 * "destroyed"
+
+### Feature detection
+
+#### Storage
+
+You can query the supported strategies for the current browser:
+
+    var supportedStorageStrategies = dribbledb.supportedStorageStrategies();
+
+Current strategies scanned are:
+
+* localstorage
+

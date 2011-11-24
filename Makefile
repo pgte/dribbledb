@@ -27,6 +27,7 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/push_strategies/restful_ajax.js\
 	${SRC_DIR}/dribbledb.js\
 	${SRC_DIR}/dribbledb_footer.js\
+	${SRC_DIR}/support/storage_strategies.js\
 
 MODULES = ${SRC_DIR}/first.js\
 	${BASE_FILES} \

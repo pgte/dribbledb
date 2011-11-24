@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 10:46:44 2011 +0000
+ * BUILD DATE: Thu Nov 24 11:01:50 2011 +0000
  */
 
  (function() {
@@ -1429,4 +1429,25 @@ if ('function' === typeof(define) && define.amd) {
 } 
 else {
   root.dribbledb = dribbledb;
-}}());
+}(function() {
+  var scannableStrategies = {
+    'localstore' : detect_localstore
+  };
+  
+  function detect_localstore() {
+    return (typeof(window.localStorage) !== 'undefined');
+  }
+  
+  function supportedStorageStrategies() {
+    var strategies = []
+      , detector;
+
+    for(var strat in scannableStrategies) {
+      detector = scannableStrategies[strat];
+      if (detector()) { strategies.push(strat); }
+    }
+    return strategies;
+  }
+  
+  dribbledb.supportedStorageStrategies = supportedStorageStrategies;
+}());}());
