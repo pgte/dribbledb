@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 11:26:56 2011 +0000
+ * BUILD DATE: Thu Nov 24 11:31:36 2011 +0000
  */
 
  (function() {
@@ -1025,33 +1025,35 @@ function dribbledb(base_url, options) {function resolve_storage_strategy(strat_n
       case 'localstore':
         strat = store_strategy_localstore;
       break;
+      case 'sessionstore':
+        strat = store_strategy_sessionstore;
+      break;
       default:
         throw new Error('Unknown store strategy: ' + strat_name);
     }
   }
   return strat;
-}// =============================================================== storage ~==
-function store_strategy_localstore() {
+}function store_strategy_webstore(store, strat_name) {
   function browser_get(path) {
-    var document = root.localStorage.getItem(path);
+    var document = store.getItem(path);
     return JSON.parse(document);
   }
 
   function browser_put(path, document) {
     document = JSON.stringify(document);
-    root.localStorage.setItem(path, document);
+    store.setItem(path, document);
   }
 
   function browser_destroy(path) {
-    if (null !== root.localStorage.getItem(path)) {
-      root.localStorage.removeItem(path);
+    if (null !== store.getItem(path)) {
+      store.removeItem(path);
       return true;
     }
     return false;
   }
 
   function browser_all_keys_iterator(path, cb, done) {
-    var storage = root.localStorage
+    var storage = store
       , keys, i = 0;
 
     done = done || noop;
@@ -1069,7 +1071,7 @@ function store_strategy_localstore() {
       }
       return keys;
     }());
-    
+
     (function iterate() {
       var key;
 
@@ -1094,7 +1096,7 @@ function store_strategy_localstore() {
     return keys;
   }
 
-  if(! root.localStorage) {
+  if(! store) {
     throw new Error('At the moment this only works in modern browsers');
   }
   return { get     : browser_get
@@ -1102,7 +1104,13 @@ function store_strategy_localstore() {
          , destroy : browser_destroy
          , all_keys_iterator: browser_all_keys_iterator
          , all_keys: browser_all_keys
+         , stratName: strat_name
          };
+}function store_strategy_localstore() {
+  return store_strategy_webstore(root.localStorage, 'localstore');
+}
+function store_strategy_sessionstore() {
+  return store_strategy_webstore(root.sessionStorage, 'sessionstore');
 }
 function resolve_pull_strategy(strat_name) {
   var strat;
@@ -1227,7 +1235,6 @@ function resolve_push_strategy(strat_name) {
               err.key = key;
               err.mine = mine;
               err.theirs = resp.body;
-              console.log('cb f', cb);
               return cb(err);
             }
           });
@@ -1245,7 +1252,7 @@ function resolve_push_strategy(strat_name) {
     unsynced_keys_iterator(push_one, cb);
   }
 }
-var that
+var that = {}
   , sync
   , store
   , pull_strategy
@@ -1255,6 +1262,8 @@ options = options || {};
 
 options.storage_strategy = options.storage_strategy || 'localstore';
 store = resolve_storage_strategy(options.storage_strategy) ();
+
+that.storageStrategy = store.stratName;
 
 options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
@@ -1408,15 +1417,13 @@ sync = (function() {
   
 }());
 
-that = {
-    sync    : sync
-  , put     : put
-  , get     : get
-  , destroy : destroy
-  , unsynced_keys : unsynced_keys
-  , all : all
-  , nuke : nuke
-};
+that.sync          = sync;
+that.put           = put;
+that.get           = get;
+that.destroy       = destroy;
+that.unsynced_keys = unsynced_keys;
+that.all           = all;
+that.nuke          = nuke;
 
 return that;
 }
@@ -1431,19 +1438,19 @@ if ('function' === typeof(define) && define.amd) {
 else {
   root.dribbledb = dribbledb;
 }(function() {
+  var strategies_order = ['localstore', 'sessionstore'];
   var scannableStrategies = {
-    'localstore' : detect_localstore
+      'localstore' : function() { return (typeof(window.localStorage) !== 'undefined'); }
+    , 'sessionstore': function() { return (typeof(window.sessionStorage) !== 'undefined'); }
   };
-  
-  function detect_localstore() {
-    return (typeof(window.localStorage) !== 'undefined');
-  }
   
   function supportedStorageStrategies() {
     var strategies = []
-      , detector;
+      , detector
+      , strat;
 
-    for(var strat in scannableStrategies) {
+    for(strat in strategies_order) {
+      strat = strategies_order[strat];
       detector = scannableStrategies[strat];
       if (detector()) { strategies.push(strat); }
     }

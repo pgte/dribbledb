@@ -33,7 +33,6 @@ function push_strategy_restful_ajax() {
               err.key = key;
               err.mine = mine;
               err.theirs = resp.body;
-              console.log('cb f', cb);
               return cb(err);
             }
           });

@@ -1,17 +1,17 @@
 (function() {
+  var strategies_order = ['localstore', 'sessionstore'];
   var scannableStrategies = {
-    'localstore' : detect_localstore
+      'localstore' : function() { return (typeof(window.localStorage) !== 'undefined'); }
+    , 'sessionstore': function() { return (typeof(window.sessionStorage) !== 'undefined'); }
   };
-  
-  function detect_localstore() {
-    return (typeof(window.localStorage) !== 'undefined');
-  }
   
   function supportedStorageStrategies() {
     var strategies = []
-      , detector;
+      , detector
+      , strat;
 
-    for(var strat in scannableStrategies) {
+    for(strat in strategies_order) {
+      strat = strategies_order[strat];
       detector = scannableStrategies[strat];
       if (detector()) { strategies.push(strat); }
     }

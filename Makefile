@@ -20,7 +20,9 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/uuid.js\
 	${SRC_DIR}/dribbledb_intro.js\
 	${SRC_DIR}/storage_strategies.js\
+	${SRC_DIR}/storage_strategies/webstore.js\
 	${SRC_DIR}/storage_strategies/localstore.js\
+	${SRC_DIR}/storage_strategies/sessionstore.js\
 	${SRC_DIR}/pull_strategies.js\
 	${SRC_DIR}/pull_strategies/couchdb_bulk.js\
 	${SRC_DIR}/push_strategies.js\

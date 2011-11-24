@@ -14,10 +14,8 @@ function Mutex() {
   }
   
   function _do(command) {
-    console.log('doing');
     locked = true;
     command(function(done) {
-      console.log('done'); 
       locked = false;
       if ('function' === typeof(done)) { done(); }
       dequeue();

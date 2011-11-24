@@ -152,7 +152,9 @@ You can query the supported strategies for the current browser:
 
     var supportedStorageStrategies = dribbledb.supportedStorageStrategies();
 
-Current strategies scanned are:
+Current strategies scanned are, and will be returned in this order:
 
-* localstorage
+* `localstorage`
+* `sessionstorage`
+
 

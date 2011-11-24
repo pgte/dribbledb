@@ -1,4 +1,4 @@
-var that
+var that = {}
   , sync
   , store
   , pull_strategy
@@ -8,6 +8,8 @@ options = options || {};
 
 options.storage_strategy = options.storage_strategy || 'localstore';
 store = resolve_storage_strategy(options.storage_strategy) ();
+
+that.storageStrategy = store.stratName;
 
 options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
@@ -161,14 +163,12 @@ sync = (function() {
   
 }());
 
-that = {
-    sync    : sync
-  , put     : put
-  , get     : get
-  , destroy : destroy
-  , unsynced_keys : unsynced_keys
-  , all : all
-  , nuke : nuke
-};
+that.sync          = sync;
+that.put           = put;
+that.get           = get;
+that.destroy       = destroy;
+that.unsynced_keys = unsynced_keys;
+that.all           = all;
+that.nuke          = nuke;
 
 return that;
