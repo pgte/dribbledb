@@ -45,6 +45,8 @@ If `obj` has an `_id` or `id` attribute, then no new value is created.
 
 If it does not, a new ID is created (using node-uuid).
 
+When an object is stored and doesn't have an `_id` or `id` attribute, an attribute named `_id` is created with the key value.
+
 ### get:
 
     var value = db.get('key');

@@ -38,7 +38,7 @@ describe('DribbleDB', function() {
 
     it("should be able to store and retrieve objects", function() {
       db.put('b', {a: 1, b : 2});
-      expect(db.get('b')).toEqual({a: 1, b : 2});
+      expect(db.get('b')).toEqual({a: 1, b : 2, _id: 'b'});
     });
     
     it("should be able to remove by key", function() {
@@ -86,7 +86,7 @@ describe('DribbleDB', function() {
       all = db.all();
       
       expect(all).toBeDefined();
-      expect(all).toContain({a:1});
+      expect(all).toContain({a:1, _id: 'a'});
       
       (function() {
         var called = 0;

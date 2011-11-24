@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 11:01:50 2011 +0000
+ * BUILD DATE: Thu Nov 24 11:26:56 2011 +0000
  */
 
  (function() {
@@ -1299,6 +1299,7 @@ function put(key, value) {
     value = key;
     key = value.id || value._id || uuid();
   }
+  if (! value.id || value._id) { value._id = key; }
   var uri = doc_key(key);
   store.put(uri, value);
   store.put(meta_key(key), 'p');

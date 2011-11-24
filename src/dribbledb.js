@@ -52,6 +52,7 @@ function put(key, value) {
     value = key;
     key = value.id || value._id || uuid();
   }
+  if (! value.id || value._id) { value._id = key; }
   var uri = doc_key(key);
   store.put(uri, value);
   store.put(meta_key(key), 'p');
