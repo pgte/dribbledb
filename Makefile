@@ -23,6 +23,7 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/storage_strategies/webstore.js\
 	${SRC_DIR}/storage_strategies/localstore.js\
 	${SRC_DIR}/storage_strategies/sessionstore.js\
+	${SRC_DIR}/storage_strategies/memstore.js\
 	${SRC_DIR}/pull_strategies.js\
 	${SRC_DIR}/pull_strategies/couchdb_bulk.js\
 	${SRC_DIR}/push_strategies.js\

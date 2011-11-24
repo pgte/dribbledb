@@ -1,8 +1,9 @@
 (function() {
-  var strategies_order = ['localstore', 'sessionstore'];
+  var strategies_order = ['localstore', 'sessionstore', 'memstore'];
   var scannableStrategies = {
-      'localstore' : function() { return (typeof(window.localStorage) !== 'undefined'); }
-    , 'sessionstore': function() { return (typeof(window.sessionStorage) !== 'undefined'); }
+      localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
+    , sessionstore : function() { return (typeof(window.sessionStorage) !== 'undefined'); }
+    , memstore     : function() { return true; }
   };
   
   function supportedStorageStrategies() {

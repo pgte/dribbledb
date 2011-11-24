@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 11:31:36 2011 +0000
+ * BUILD DATE: Thu Nov 24 11:54:55 2011 +0000
  */
 
  (function() {
@@ -1018,21 +1018,12 @@ function global_since_key(base_url)   { return global_item_key(base_url, 's');  
   ;
 
 function dribbledb(base_url, options) {function resolve_storage_strategy(strat_name) {
-  var strat;
-  if ('function' === typeof(strat_name)) { strat = strat_name; }
-  else {
-    switch(strat_name) {
-      case 'localstore':
-        strat = store_strategy_localstore;
-      break;
-      case 'sessionstore':
-        strat = store_strategy_sessionstore;
-      break;
-      default:
-        throw new Error('Unknown store strategy: ' + strat_name);
-    }
-  }
-  return strat;
+  var strats = {
+      'localstore'   : store_strategy_localstore
+    , 'sessionstore' : store_strategy_sessionstore
+    , 'memstore'     : store_strategy_memstore
+  };
+  return strats[strat_name];
 }function store_strategy_webstore(store, strat_name) {
   function browser_get(path) {
     var document = store.getItem(path);
@@ -1112,7 +1103,77 @@ function dribbledb(base_url, options) {function resolve_storage_strategy(strat_n
 function store_strategy_sessionstore() {
   return store_strategy_webstore(root.sessionStorage, 'sessionstore');
 }
-function resolve_pull_strategy(strat_name) {
+function store_strategy_memstore() {
+  var store = {};
+
+  function clone(o) {
+    return JSON.parse(JSON.stringify(o));
+  }
+
+  function mem_get(path) {
+    var o = store[path];
+    if ('undefined' !== typeof(o)) { return clone(o); }
+    return null;
+  }
+
+  function mem_put(path, document) {
+    store[path] = clone(document);
+  }
+
+  function mem_destroy(path) {
+    delete store[path];
+  }
+
+  function mem_all_keys_iterator(path, cb, done) {
+    var storage = store
+      , keys, i = 0;
+
+    done = done || noop;
+
+    keys = (function() {
+      var key
+        , keys = [];
+
+      for(key in store) {
+        if (key && 0 === key.indexOf(path)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    }());
+
+    (function iterate() {
+      var key;
+
+      if (i >= keys.length) { return done(); }
+
+      function next() {
+        i ++;
+        iterate();
+      }
+
+      key = keys[i];
+      cb(key.slice(path.length + 1), mem_get(key), next);
+    }());
+  }
+
+  function mem_all_keys(path) {
+    var keys = [];
+    mem_all_keys_iterator(path, function(key, value, done) {
+      keys.push(key);
+      done();
+    });
+    return keys;
+  }
+
+  return { get     : mem_get
+         , put     : mem_put
+         , destroy : mem_destroy
+         , all_keys_iterator: mem_all_keys_iterator
+         , all_keys: mem_all_keys
+         , stratName: 'memstore'
+         };
+}function resolve_pull_strategy(strat_name) {
   var strat;
   if ('function' === typeof(strat_name)) { strat = strat_name; }
   else {
@@ -1438,10 +1499,11 @@ if ('function' === typeof(define) && define.amd) {
 else {
   root.dribbledb = dribbledb;
 }(function() {
-  var strategies_order = ['localstore', 'sessionstore'];
+  var strategies_order = ['localstore', 'sessionstore', 'memstore'];
   var scannableStrategies = {
-      'localstore' : function() { return (typeof(window.localStorage) !== 'undefined'); }
-    , 'sessionstore': function() { return (typeof(window.sessionStorage) !== 'undefined'); }
+      localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
+    , sessionstore : function() { return (typeof(window.sessionStorage) !== 'undefined'); }
+    , memstore     : function() { return true; }
   };
   
   function supportedStorageStrategies() {

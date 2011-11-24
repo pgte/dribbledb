@@ -21,7 +21,7 @@ describe('DribbleDB', function() {
   });
   
   it("should support feature detection", function() {
-    expect(dbd.supportedStorageStrategies()).toEqual(['localstore', 'sessionstore']);
+    expect(dbd.supportedStorageStrategies()).toEqual(['localstore', 'sessionstore', 'memstore']);
   });
   
   it("should have a version number", function() {
@@ -62,6 +62,30 @@ describe('DribbleDB', function() {
     var db = dbd('http://foo.com/sessionposts', {storage_strategy: 'sessionstore'});
     
     expect(db.storageStrategy).toEqual('sessionstore');
+    
+    it("should be able to put a string and get it back", function() {
+      db.put('a', 'abc');
+      expect(db.get('a')).toEqual('abc');
+    });
+
+    it("should be able to store and retrieve objects", function() {
+      db.put('b', {a: 1, b : 2});
+      expect(db.get('b')).toEqual({a: 1, b : 2, _id: 'b'});
+    });
+    
+    it("should be able to remove by key", function() {
+      db.put("c", 1);
+      expect(db.get("c")).toEqual(1);
+      db.destroy("c")
+      expect(db.get("c")).toBeNull();
+    });
+    
+  });
+
+  describe("when a dribbledb using memstore has been instantiated", function() {
+    var db = dbd('http://foo.com/memposts', {storage_strategy: 'memstore'});
+    
+    expect(db.storageStrategy).toEqual('memstore');
     
     it("should be able to put a string and get it back", function() {
       db.put('a', 'abc');
