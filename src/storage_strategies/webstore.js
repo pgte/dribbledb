@@ -1,4 +1,4 @@
-function store_strategy_webstore(store, strat_name) {
+function store_strategy_webstore(base_url, store, strat_name) {
   function browser_get(path) {
     var document = store.getItem(path);
     return JSON.parse(document);

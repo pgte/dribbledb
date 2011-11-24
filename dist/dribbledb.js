@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 11:54:55 2011 +0000
+ * BUILD DATE: Thu Nov 24 12:14:30 2011 +0000
  */
 
  (function() {
@@ -1017,14 +1017,71 @@ function global_since_key(base_url)   { return global_item_key(base_url, 's');  
   , STORAGE_NS       = 'dbd'
   ;
 
-function dribbledb(base_url, options) {function resolve_storage_strategy(strat_name) {
+function dribbledb(base_url, options) {function create_storage(engineConstructor) {
+  return function(base_url) {
+    var engine = engineConstructor();
+
+
+    // === keys ~========
+
+    function doc_key(id) {
+      return global_doc_key(base_url, id);
+    }
+
+    function meta_key(id) {
+      return global_meta_key(base_url, id);
+    }
+
+    function since_key() {
+      return global_since_key(base_url);
+    }
+
+
+    // === data manipulation ~========
+
+    function doc_get(key) { return engine.get(doc_key(key)); }
+    function doc_put(key, value) { return engine.put(doc_key(key), value); }
+    function doc_destroy(key) { return engine.destroy(doc_key(key)); }
+    function meta_get(key) { return engine.get(meta_key(key)); }
+    function meta_put(key, value) { return engine.put(meta_key(key), value); }
+    function meta_destroy(key) { return engine.destroy(meta_key(key)); }
+    function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(doc_key(), cb, done); }
+    function all_doc_keys() { return engine.all_keys(doc_key()); }
+    function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(meta_key(), cb, done); }
+    function all_meta_keys() { return engine.all_keys(meta_key()); }
+
+    function pulled_since(val) {
+      var key = since_key();
+      if (! val) {
+        return engine.get(key) || 0;
+      } else {
+        return angine.put(key, val);
+      }
+    }
+
+    return {
+        stratName      : engine.stratName
+      , doc_get        : doc_get
+      , doc_put        : doc_put
+      , doc_destroy    : doc_destroy
+      , meta_get       : meta_get
+      , meta_put       : meta_put
+      , meta_destroy   : meta_destroy
+      , all_doc_keys_iterator : all_doc_keys_iterator
+      , all_doc_keys   : all_doc_keys
+      , all_meta_keys_iterator : all_meta_keys_iterator
+      , all_meta_keys  : all_meta_keys
+      , pulled_since   : pulled_since
+    }
+  }
+}function resolve_storage_strategy(strat_name) {
   var strats = {
       'localstore'   : store_strategy_localstore
     , 'sessionstore' : store_strategy_sessionstore
     , 'memstore'     : store_strategy_memstore
   };
-  return strats[strat_name];
-}function store_strategy_webstore(store, strat_name) {
+  return create_storage(strats[strat_name]);
+}function store_strategy_webstore(base_url, store, strat_name) {
   function browser_get(path) {
     var document = store.getItem(path);
     return JSON.parse(document);
@@ -1097,13 +1154,13 @@ function dribbledb(base_url, options) {function resolve_storage_strategy(strat_n
          , all_keys: browser_all_keys
          , stratName: strat_name
          };
-}function store_strategy_localstore() {
-  return store_strategy_webstore(root.localStorage, 'localstore');
+}function store_strategy_localstore(base_url) {
+  return store_strategy_webstore(base_url, root.localStorage, 'localstore');
 }
-function store_strategy_sessionstore() {
-  return store_strategy_webstore(root.sessionStorage, 'sessionstore');
+function store_strategy_sessionstore(base_url) {
+  return store_strategy_webstore(base_url, root.sessionStorage, 'sessionstore');
 }
-function store_strategy_memstore() {
+function store_strategy_memstore(base_url) {
   var store = {};
 
   function clone(o) {
@@ -1219,9 +1276,9 @@ function store_strategy_memstore() {
           change = results[i];
           key = change.id;
           theirs = change.doc;
-          if (get(meta_key(key))) {
+          if (store.meta_get(key)) {
             if (resolveConflicts) {
-              mine = get(doc_key(key));
+              mine = store.doc_get(key);
               resolveConflicts(mine, theirs, function(resolved) {
                 put(key, resolved);
                 next();
@@ -1301,7 +1358,7 @@ function resolve_push_strategy(strat_name) {
           });
         } else {
           if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          store.destroy(meta_key(key));
+          store.meta_destroy(key);
           done();
         }
       }
@@ -1321,10 +1378,11 @@ var that = {}
 
 options = options || {};
 
-options.storage_strategy = options.storage_strategy || 'localstore';
-store = resolve_storage_strategy(options.storage_strategy) ();
 
-that.storageStrategy = store.stratName;
+// ====  strategy resolving ~======
+
+options.storage_strategy = options.storage_strategy || 'localstore';
+store = resolve_storage_strategy(options.storage_strategy) (base_url);
 
 options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
@@ -1332,37 +1390,20 @@ pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
 options.push_strategy = options.push_strategy || 'restful_ajax';
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
-function doc_key(id) {
-  return global_doc_key(base_url, id);
-}
 
-function meta_key(id) {
-  return global_meta_key(base_url, id);
-}
-
-function since_key() {
-  return global_since_key(base_url);
-}
+// ============================= DB manipulation  ~===
 
 function unsynced_keys() {
-  return store.all_keys(meta_key());
+  return store.all_meta_keys();
 }
 
 function unsynced_keys_iterator(cb, done) {
-  store.all_keys_iterator(meta_key(), cb, done);
+  store.all_meta_keys_iterator(cb, done);
 }
 
 function pulled_since(val) {
-  var key = since_key();
-  if (! val) {
-    return store.get(key) || 0;
-  } else {
-    store.put(key, val);
-  }
+  return store.pulled_since();
 }
-
-
-// ============================= DB manipulation  ~===
 
 function put(key, value) {
   if (arguments.length < 2) {
@@ -1370,32 +1411,30 @@ function put(key, value) {
     key = value.id || value._id || uuid();
   }
   if (! value.id || value._id) { value._id = key; }
-  var uri = doc_key(key);
-  store.put(uri, value);
-  store.put(meta_key(key), 'p');
+  store.doc_put(key, value);
+  store.meta_put(key, 'p');
   return key;
 }
 
 function remote_put(key, value) {
-  var uri = doc_key(key);
-  store.put(uri, value);
+  return store.doc_put(key, value);
 }
 
 function get(key) {
-  return store.get(doc_key(key));
+  return store.doc_get(key);
 }
 
 function destroy(key) {
   var meta_value = 'd';
   var old = get(key);
   if (old && old._rev) { meta_value += old._rev; }
-  if (store.destroy(doc_key(key))) {
-    store.put(meta_key(key), meta_value);
+  if (store.doc_destroy(key)) {
+    store.meta_put(key, meta_value);
   }
 }
 
 function remote_destroy(key) {
-  store.destroy(doc_key(key));
+  store.doc_destroy(key);
 }
 
 function all(cb, done) {
@@ -1409,21 +1448,21 @@ function all(cb, done) {
     };
   }
   
-  store.all_keys_iterator(doc_key(), cb, done);
+  store.all_doc_keys_iterator(cb, done);
   return ret;
 }
 
 function nuke() {
-  store.all_keys(doc_key()).forEach(function(key) {
-    store.destroy(doc_key(key));
+  store.all_doc_keys().forEach(function(key) {
+    store.doc_destroy(key);
   });
-  store.all_keys(meta_key()).forEach(function(key) {
-    store.destroy(meta_key(key));
+  store.all_meta_keys().forEach(function(key) {
+    store.meta_destroy(key);
   });
   return true;
 }
 
-// ========================================= sync   ~==
+// ======================= sync   ~==
 
 function pull(resolveConflicts, cb) {
   pull_strategy(resolveConflicts, cb);
@@ -1478,6 +1517,7 @@ sync = (function() {
   
 }());
 
+that.storageStrategy = store.stratName;
 that.sync          = sync;
 that.put           = put;
 that.get           = get;

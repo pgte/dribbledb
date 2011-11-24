@@ -19,6 +19,7 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/keys.js\
 	${SRC_DIR}/uuid.js\
 	${SRC_DIR}/dribbledb_intro.js\
+	${SRC_DIR}/storage.js\
 	${SRC_DIR}/storage_strategies.js\
 	${SRC_DIR}/storage_strategies/webstore.js\
 	${SRC_DIR}/storage_strategies/localstore.js\

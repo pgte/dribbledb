@@ -1,4 +1,4 @@
-function store_strategy_memstore() {
+function store_strategy_memstore(base_url) {
   var store = {};
 
   function clone(o) {

@@ -31,9 +31,9 @@ function pull_strategy_couchdb_bulk() {
           change = results[i];
           key = change.id;
           theirs = change.doc;
-          if (get(meta_key(key))) {
+          if (store.meta_get(key)) {
             if (resolveConflicts) {
-              mine = get(doc_key(key));
+              mine = store.doc_get(key);
               resolveConflicts(mine, theirs, function(resolved) {
                 put(key, resolved);
                 next();
