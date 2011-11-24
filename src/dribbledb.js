@@ -1,11 +1,15 @@
-var that = {}
+var that
   , sync
-  , pull_strategy;
+  , pull_strategy
+  , push_strategy;
 
 options = options || {};
-options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 
+options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
+
+options.push_strategy = options.push_strategy || 'restful_ajax';
+push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 function doc_key(id) {
   return global_doc_key(base_url, id);
@@ -97,8 +101,15 @@ function nuke() {
   return true;
 }
 
-
 // ========================================= sync   ~==
+
+function pull(resolveConflicts, cb) {
+  pull_strategy(resolveConflicts, cb);
+}
+
+function push(resolveConflicts, cb) {
+  push_strategy(resolveConflicts, cb);
+}
 
 sync = (function() {
   var syncEmitter = new EventEmitter();
@@ -107,7 +118,7 @@ sync = (function() {
     var calledback = false;
     
     if (arguments.length < 2) { cb = resolveConflicts; resolveConflicts = undefined;}
-    
+
     function callback() {
       if (! calledback && typeof(cb) === 'function') {
         calledback = true;
@@ -116,7 +127,7 @@ sync = (function() {
       }
       return false;
     }
-    
+
     function error(err) {
       if (err) {
         if (! callback(err)) {
@@ -126,67 +137,15 @@ sync = (function() {
       }
       return false;
     }
-    
 
-    // === push to remote ~=============
-
-    function push_one(key, value, done) {
-      var method
-        , op = value.charAt(0)
-        , rev = value.substr(1)
-        , mine = get(key)
-        , uri = base_url + '/' + key;
-      
-      method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
-      if (! method) { throw new Error('Invalid meta action: ' + value); }
-
-      if (rev) { uri += '?rev=' + rev; }
-      
-      function handleResponse(err, res) {
-        if (err) { return error(err); }
-
-        // ======= conflict! ~==
-
-        if (res.conflict) {
-          remote_get(uri, function(err, resp) {
-            if (err) { return error(err); }
-            if (resolveConflicts) {
-              resolveConflicts(mine, resp.body, function(resolved) {
-                put(key, resolved);
-                push_one(key, value, done);
-              });
-            } else {
-              err = new Error('Conflict');
-              err.key = key;
-              err.mine = mine;
-              err.theirs = resp.body;
-              error(err);
-            }
-          });
-        } else {
-          if (('del' !== method || ! res.notFound) && ! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          local_store.destroy(meta_key(key));
-          done();
-        }
-      }
-      
-      remote(method, uri, mine, handleResponse);
-    }
-    
-
-    // === pull from remote ~=============
-
-    function pull(cb) {
-      pull_strategy(cb);
-    }
-    
-    unsynced_keys_iterator(push_one, function(err) {
+    push(resolveConflicts, function(err) {
       if (err) { return error(err); }
-      pull(function(err) {
+      pull(resolveConflicts, function(err) {
         if (err) { return error(err); }
         callback();
       });
     });
+
   }
 
   sync.on = function() {
@@ -197,12 +156,14 @@ sync = (function() {
   
 }());
 
-that.sync = sync;
-that.put = put;
-that.get = get;
-that.destroy = destroy;
-that.unsynced_keys = unsynced_keys;
-that.all = all;
-that.nuke = nuke;
+that = {
+    sync    : sync
+  , put     : put
+  , get     : get
+  , destroy : destroy
+  , unsynced_keys : unsynced_keys
+  , all : all
+  , nuke : nuke
+};
 
 return that;

@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Wed Nov 23 18:16:17 2011 +0000
+ * BUILD DATE: Wed Nov 23 18:52:51 2011 +0000
  */
 
  (function() {
@@ -1107,93 +1107,144 @@ function dribbledb(base_url, options) {function resolve_pull_strategy(strat_name
   return strat;
 }function pull_strategy_couchdb_bulk() {
   var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true';
-  return function(cb) {
+  return function(resolveConflicts, cb) {
     var calledback = false;
     
-    function callback() {
-      if (! calledback && typeof(cb) === 'function') {
-        calledback = true;
-        cb.apply(this, arguments);
-        return true;
-      }
-      return false;
-    }
-    
-    function error(err) {
-      if (err) {
-        if (! callback(err)) {
-          syncEmitter.emit('error', err);
-        }
-        return true;
-      }
-      return false;
-    }
-    
     remote_get(uri, function(err, resp) {
-        var i, body, results, change, key, theirs, err2, mine;
+      var i, body, results, change, key, theirs, err2, mine;
 
-        if (err) { return error(err); }
-        if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
-        if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
-        body = resp.body;
-        if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
-        if (! body.hasOwnProperty('last_seq')) {
-          err2 = new Error('response body does not have .last_seq: ' + uri);
-          err2.body = body;
-          return cb(err2);
-        }
-        if (! body.hasOwnProperty('results')) {
-          err2 = new Error('response body does not have .results: ' + uri);
-          err2.body = body;
-          return cb(err2);
-        }
+      if (err) { return cb(err); }
+      if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
+      if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
+      body = resp.body;
+      if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
+      if (! body.hasOwnProperty('last_seq')) {
+        err2 = new Error('response body does not have .last_seq: ' + uri);
+        err2.body = body;
+        return cb(err2);
+      }
+      if (! body.hasOwnProperty('results')) {
+        err2 = new Error('response body does not have .results: ' + uri);
+        err2.body = body;
+        return cb(err2);
+      }
 
-        results = body.results;
-        i = -1;
+      results = body.results;
+      i = -1;
 
-        (function next() {
-          i += 1;
-          if (i < results.length) {
-            change = results[i];
-            key = change.id;
-            theirs = change.doc;
-            if (get(meta_key(key))) {
-              if (resolveConflicts) {
-                mine = get(doc_key(key));
-                resolveConflicts(mine, theirs, function(resolved) {
-                  put(key, resolved);
-                  next();
-                });
-              } else {
-                err2 = new Error('Conflict');
-                err2.key = key;
-                err2.mine = mine;
-                err2.theirs = theirs;
-                error(err2);
+      (function next() {
+        i += 1;
+        if (i < results.length) {
+          change = results[i];
+          key = change.id;
+          theirs = change.doc;
+          if (get(meta_key(key))) {
+            if (resolveConflicts) {
+              mine = get(doc_key(key));
+              resolveConflicts(mine, theirs, function(resolved) {
+                put(key, resolved);
                 next();
-              }
+              });
             } else {
-              if (change.deleted) { remote_destroy(key); }
-              else { remote_put(key, theirs); }
-
-              next();
+              err2 = new Error('Conflict');
+              err2.key = key;
+              err2.mine = mine;
+              err2.theirs = theirs;
+              return cb(err2);
             }
           } else {
-            // finished
-            pulled_since(body.last_seq);
-            cb();
+            if (change.deleted) { remote_destroy(key); }
+            else { remote_put(key, theirs); }
+
+            next();
           }
-        }());
-      });
+        } else {
+          // finished
+          pulled_since(body.last_seq);
+          cb();
+        }
+      }());
+    });
   }
-};var that = {}
+};
+function resolve_push_strategy(strat_name) {
+  var strat;
+  if ('function' === typeof(strat_name)) { strat = strat_name; }
+  else {
+    switch(strat_name) {
+      case 'restful_ajax':
+        strat = push_strategy_restful_ajax;
+      break;
+      default:
+        throw new Error('Unknown push strategy: ' + strat_name);
+    }
+  }
+  return strat;
+}function push_strategy_restful_ajax() {
+  
+  return function(resolveConflicts, cb) {
+    var calledback = false;
+    
+    function push_one(key, value, done) {
+      var method
+        , op = value.charAt(0)
+        , rev = value.substr(1)
+        , mine = get(key)
+        , uri = base_url + '/' + key;
+
+      method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
+      if (! method) { throw new Error('Invalid meta action: ' + value); }
+
+      if (rev) { uri += '?rev=' + rev; }
+
+      function handleResponse(err, res) {
+        if (err) { return cb(err); }
+
+        // ======= conflict! ~==
+
+        if (res.conflict) {
+          remote_get(uri, function(err, resp) {
+            if (err) { return cb(err); }
+            if (resolveConflicts) {
+              resolveConflicts(mine, resp.body, function(resolved) {
+                put(key, resolved);
+                push_one(key, value, done);
+              });
+            } else {
+              err = new Error('Conflict');
+              err.key = key;
+              err.mine = mine;
+              err.theirs = resp.body;
+              console.log('cb f', cb);
+              return cb(err);
+            }
+          });
+        } else {
+          if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
+          local_store.destroy(meta_key(key));
+          done();
+        }
+      }
+
+      remote(method, uri, mine, handleResponse);
+    }
+
+    
+    unsynced_keys_iterator(push_one, cb);
+  }
+}
+var that
   , sync
-  , pull_strategy;
+  , pull_strategy
+  , push_strategy;
 
 options = options || {};
-options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 
+options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
+
+options.push_strategy = options.push_strategy || 'restful_ajax';
+push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 function doc_key(id) {
   return global_doc_key(base_url, id);
@@ -1285,8 +1336,15 @@ function nuke() {
   return true;
 }
 
-
 // ========================================= sync   ~==
+
+function pull(resolveConflicts, cb) {
+  pull_strategy(resolveConflicts, cb);
+}
+
+function push(resolveConflicts, cb) {
+  push_strategy(resolveConflicts, cb);
+}
 
 sync = (function() {
   var syncEmitter = new EventEmitter();
@@ -1295,7 +1353,7 @@ sync = (function() {
     var calledback = false;
     
     if (arguments.length < 2) { cb = resolveConflicts; resolveConflicts = undefined;}
-    
+
     function callback() {
       if (! calledback && typeof(cb) === 'function') {
         calledback = true;
@@ -1304,7 +1362,7 @@ sync = (function() {
       }
       return false;
     }
-    
+
     function error(err) {
       if (err) {
         if (! callback(err)) {
@@ -1314,67 +1372,15 @@ sync = (function() {
       }
       return false;
     }
-    
 
-    // === push to remote ~=============
-
-    function push_one(key, value, done) {
-      var method
-        , op = value.charAt(0)
-        , rev = value.substr(1)
-        , mine = get(key)
-        , uri = base_url + '/' + key;
-      
-      method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
-      if (! method) { throw new Error('Invalid meta action: ' + value); }
-
-      if (rev) { uri += '?rev=' + rev; }
-      
-      function handleResponse(err, res) {
-        if (err) { return error(err); }
-
-        // ======= conflict! ~==
-
-        if (res.conflict) {
-          remote_get(uri, function(err, resp) {
-            if (err) { return error(err); }
-            if (resolveConflicts) {
-              resolveConflicts(mine, resp.body, function(resolved) {
-                put(key, resolved);
-                push_one(key, value, done);
-              });
-            } else {
-              err = new Error('Conflict');
-              err.key = key;
-              err.mine = mine;
-              err.theirs = resp.body;
-              error(err);
-            }
-          });
-        } else {
-          if (('del' !== method || ! res.notFound) && ! res.ok) { return error(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          local_store.destroy(meta_key(key));
-          done();
-        }
-      }
-      
-      remote(method, uri, mine, handleResponse);
-    }
-    
-
-    // === pull from remote ~=============
-
-    function pull(cb) {
-      pull_strategy(cb);
-    }
-    
-    unsynced_keys_iterator(push_one, function(err) {
+    push(resolveConflicts, function(err) {
       if (err) { return error(err); }
-      pull(function(err) {
+      pull(resolveConflicts, function(err) {
         if (err) { return error(err); }
         callback();
       });
     });
+
   }
 
   sync.on = function() {
@@ -1385,15 +1391,18 @@ sync = (function() {
   
 }());
 
-that.sync = sync;
-that.put = put;
-that.get = get;
-that.destroy = destroy;
-that.unsynced_keys = unsynced_keys;
-that.all = all;
-that.nuke = nuke;
+that = {
+    sync    : sync
+  , put     : put
+  , get     : get
+  , destroy : destroy
+  , unsynced_keys : unsynced_keys
+  , all : all
+  , nuke : nuke
+};
 
-return that;}
+return that;
+}
 // =============================================================== exports ~==
 
 dribbledb.version = '0.1.0';

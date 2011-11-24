@@ -1,31 +1,12 @@
 function pull_strategy_couchdb_bulk() {
   var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true';
-  return function(cb) {
+  return function(resolveConflicts, cb) {
     var calledback = false;
-    
-    function callback() {
-      if (! calledback && typeof(cb) === 'function') {
-        calledback = true;
-        cb.apply(this, arguments);
-        return true;
-      }
-      return false;
-    }
-    
-    function error(err) {
-      if (err) {
-        if (! callback(err)) {
-          syncEmitter.emit('error', err);
-        }
-        return true;
-      }
-      return false;
-    }
     
     remote_get(uri, function(err, resp) {
       var i, body, results, change, key, theirs, err2, mine;
 
-      if (err) { return error(err); }
+      if (err) { return cb(err); }
       if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
       if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
       body = resp.body;
@@ -62,8 +43,7 @@ function pull_strategy_couchdb_bulk() {
               err2.key = key;
               err2.mine = mine;
               err2.theirs = theirs;
-              error(err2);
-              next();
+              return cb(err2);
             }
           } else {
             if (change.deleted) { remote_destroy(key); }

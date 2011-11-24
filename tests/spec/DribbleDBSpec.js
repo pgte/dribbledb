@@ -122,10 +122,7 @@ describe('DribbleDB', function() {
       db.put("c", {c:3});
       
       expect(db.nuke()).toEqual(true);
-      
-      console.log('nuked');
       expect(db.all().length).toEqual(0);
-      
       expect(db.unsynced_keys.length).toEqual(0);
     });
   });
