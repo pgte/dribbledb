@@ -22,11 +22,11 @@ push_strategy = resolve_push_strategy(options.push_strategy) ();
 // ============================= DB manipulation  ~===
 
 function unsynced_keys() {
-  return store.all_meta_keys();
+  return store.meta.all_keys();
 }
 
 function unsynced_keys_iterator(cb, done) {
-  store.all_meta_keys_iterator(cb, done);
+  store.meta.all_keys_iterator(cb, done);
 }
 
 function pulled_since(val) {
@@ -39,30 +39,30 @@ function put(key, value) {
     key = value.id || value._id || uuid();
   }
   if (! value.id || value._id) { value._id = key; }
-  store.doc_put(key, value);
-  store.meta_put(key, 'p');
+  store.doc.put(key, value);
+  store.meta.put(key, 'p');
   return key;
 }
 
 function remote_put(key, value) {
-  return store.doc_put(key, value);
+  return store.doc.put(key, value);
 }
 
 function get(key) {
-  return store.doc_get(key);
+  return store.doc.get(key);
 }
 
 function destroy(key) {
   var meta_value = 'd';
   var old = get(key);
   if (old && old._rev) { meta_value += old._rev; }
-  if (store.doc_destroy(key)) {
-    store.meta_put(key, meta_value);
+  if (store.doc.destroy(key)) {
+    store.meta.put(key, meta_value);
   }
 }
 
 function remote_destroy(key) {
-  store.doc_destroy(key);
+  store.doc.destroy(key);
 }
 
 function all(cb, done) {
@@ -76,16 +76,16 @@ function all(cb, done) {
     };
   }
   
-  store.all_doc_keys_iterator(cb, done);
+  store.doc.all_keys_iterator(cb, done);
   return ret;
 }
 
 function nuke() {
-  store.all_doc_keys().forEach(function(key) {
-    store.doc_destroy(key);
+  store.doc.all_keys().forEach(function(key) {
+    store.doc.destroy(key);
   });
-  store.all_meta_keys().forEach(function(key) {
-    store.meta_destroy(key);
+  store.meta.all_keys().forEach(function(key) {
+    store.meta.destroy(key);
   });
   return true;
 }

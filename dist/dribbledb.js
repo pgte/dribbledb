@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 12:14:30 2011 +0000
+ * BUILD DATE: Thu Nov 24 14:27:31 2011 +0000
  */
 
  (function() {
@@ -1061,16 +1061,20 @@ function dribbledb(base_url, options) {function create_storage(engineConstructor
 
     return {
         stratName      : engine.stratName
-      , doc_get        : doc_get
-      , doc_put        : doc_put
-      , doc_destroy    : doc_destroy
-      , meta_get       : meta_get
-      , meta_put       : meta_put
-      , meta_destroy   : meta_destroy
-      , all_doc_keys_iterator : all_doc_keys_iterator
-      , all_doc_keys   : all_doc_keys
-      , all_meta_keys_iterator : all_meta_keys_iterator
-      , all_meta_keys  : all_meta_keys
+      , doc : {
+            get        : doc_get
+          , put        : doc_put
+          , destroy    : doc_destroy
+          , all_keys_iterator : all_doc_keys_iterator
+          , all_keys   : all_doc_keys
+        }
+      , meta : {
+          get       : meta_get
+        , put       : meta_put
+        , destroy   : meta_destroy
+        , all_keys_iterator : all_meta_keys_iterator
+        , all_keys  : all_meta_keys
+      }
       , pulled_since   : pulled_since
     }
   }
@@ -1276,7 +1280,7 @@ function store_strategy_memstore(base_url) {
           change = results[i];
           key = change.id;
           theirs = change.doc;
-          if (store.meta_get(key)) {
+          if (store.meta.get(key)) {
             if (resolveConflicts) {
               mine = store.doc_get(key);
               resolveConflicts(mine, theirs, function(resolved) {
@@ -1358,7 +1362,7 @@ function resolve_push_strategy(strat_name) {
           });
         } else {
           if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          store.meta_destroy(key);
+          store.meta.destroy(key);
           done();
         }
       }
@@ -1394,11 +1398,11 @@ push_strategy = resolve_push_strategy(options.push_strategy) ();
 // ============================= DB manipulation  ~===
 
 function unsynced_keys() {
-  return store.all_meta_keys();
+  return store.meta.all_keys();
 }
 
 function unsynced_keys_iterator(cb, done) {
-  store.all_meta_keys_iterator(cb, done);
+  store.meta.all_keys_iterator(cb, done);
 }
 
 function pulled_since(val) {
@@ -1411,30 +1415,30 @@ function put(key, value) {
     key = value.id || value._id || uuid();
   }
   if (! value.id || value._id) { value._id = key; }
-  store.doc_put(key, value);
-  store.meta_put(key, 'p');
+  store.doc.put(key, value);
+  store.meta.put(key, 'p');
   return key;
 }
 
 function remote_put(key, value) {
-  return store.doc_put(key, value);
+  return store.doc.put(key, value);
 }
 
 function get(key) {
-  return store.doc_get(key);
+  return store.doc.get(key);
 }
 
 function destroy(key) {
   var meta_value = 'd';
   var old = get(key);
   if (old && old._rev) { meta_value += old._rev; }
-  if (store.doc_destroy(key)) {
-    store.meta_put(key, meta_value);
+  if (store.doc.destroy(key)) {
+    store.meta.put(key, meta_value);
   }
 }
 
 function remote_destroy(key) {
-  store.doc_destroy(key);
+  store.doc.destroy(key);
 }
 
 function all(cb, done) {
@@ -1448,16 +1452,16 @@ function all(cb, done) {
     };
   }
   
-  store.all_doc_keys_iterator(cb, done);
+  store.doc.all_keys_iterator(cb, done);
   return ret;
 }
 
 function nuke() {
-  store.all_doc_keys().forEach(function(key) {
-    store.doc_destroy(key);
+  store.doc.all_keys().forEach(function(key) {
+    store.doc.destroy(key);
   });
-  store.all_meta_keys().forEach(function(key) {
-    store.meta_destroy(key);
+  store.meta.all_keys().forEach(function(key) {
+    store.meta.destroy(key);
   });
   return true;
 }

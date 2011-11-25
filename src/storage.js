@@ -42,16 +42,20 @@ function create_storage(engineConstructor) {
 
     return {
         stratName      : engine.stratName
-      , doc_get        : doc_get
-      , doc_put        : doc_put
-      , doc_destroy    : doc_destroy
-      , meta_get       : meta_get
-      , meta_put       : meta_put
-      , meta_destroy   : meta_destroy
-      , all_doc_keys_iterator : all_doc_keys_iterator
-      , all_doc_keys   : all_doc_keys
-      , all_meta_keys_iterator : all_meta_keys_iterator
-      , all_meta_keys  : all_meta_keys
+      , doc : {
+            get        : doc_get
+          , put        : doc_put
+          , destroy    : doc_destroy
+          , all_keys_iterator : all_doc_keys_iterator
+          , all_keys   : all_doc_keys
+        }
+      , meta : {
+          get       : meta_get
+        , put       : meta_put
+        , destroy   : meta_destroy
+        , all_keys_iterator : all_meta_keys_iterator
+        , all_keys  : all_meta_keys
+      }
       , pulled_since   : pulled_since
     }
   }
