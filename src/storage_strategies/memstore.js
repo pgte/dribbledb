@@ -1,27 +1,37 @@
 function store_strategy_memstore(base_url) {
   var store = {};
 
+  function full_path(prefix, id) {
+    if (prefix.length > 1) { throw new Error('Invalid prefix: ' + prefix); }
+    var path = STORAGE_NS + ':' + prefix + ':' + base_url;
+    if ('undefined' !== typeof(id)) {
+      path += '/' + id;
+    }
+    return path;
+  }
+
   function clone(o) {
     return JSON.parse(JSON.stringify(o));
   }
 
-  function mem_get(path) {
-    var o = store[path];
+  function mem_get(prefix, id) {
+    var o = store[full_path(prefix, id)];
     if ('undefined' !== typeof(o)) { return clone(o); }
     return null;
   }
 
-  function mem_put(path, document) {
-    store[path] = clone(document);
+  function mem_put(prefix, id, document) {
+    store[full_path(prefix, id)] = clone(document);
   }
 
-  function mem_destroy(path) {
-    delete store[path];
+  function mem_destroy(prefix, id) {
+    delete store[full_path(prefix, id)];
   }
 
-  function mem_all_keys_iterator(path, cb, done) {
+  function mem_all_keys_iterator(prefix, cb, done) {
     var storage = store
-      , keys, i = 0;
+      , keys, i = 0
+      , path = full_path(prefix);
 
     done = done || noop;
 
@@ -52,9 +62,9 @@ function store_strategy_memstore(base_url) {
     }());
   }
 
-  function mem_all_keys(path) {
+  function mem_all_keys(prefix) {
     var keys = [];
-    mem_all_keys_iterator(path, function(key, value, done) {
+    mem_all_keys_iterator(prefix, function(key, value, done) {
       keys.push(key);
       done();
     });

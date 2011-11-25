@@ -16,7 +16,6 @@ BASE_FILES = ${SRC_DIR}/event_emitter.js\
 	${SRC_DIR}/request.js\
 	${SRC_DIR}/noop.js\
 	${SRC_DIR}/remote.js\
-	${SRC_DIR}/keys.js\
 	${SRC_DIR}/uuid.js\
 	${SRC_DIR}/dribbledb_intro.js\
 	${SRC_DIR}/storage.js\

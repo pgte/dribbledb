@@ -1,42 +1,39 @@
+// === keys ~========
+
+function item_key(type, id)   {
+  var str = type;
+  if (id !== undefined) {
+    str += ('/' + id);
+  }
+  return str;
+}
+var DOC_PREFIX = 'd';
+var META_PREFIX = 'm';
+var SINCE_PREFIX = 's';
+
 function create_storage(engineConstructor) {
   return function(base_url) {
-    var engine = engineConstructor();
-
-
-    // === keys ~========
-
-    function doc_key(id) {
-      return global_doc_key(base_url, id);
-    }
-
-    function meta_key(id) {
-      return global_meta_key(base_url, id);
-    }
-
-    function since_key() {
-      return global_since_key(base_url);
-    }
+    var engine = engineConstructor(base_url);
 
 
     // === data manipulation ~========
 
-    function doc_get(key) { return engine.get(doc_key(key)); }
-    function doc_put(key, value) { return engine.put(doc_key(key), value); }
-    function doc_destroy(key) { return engine.destroy(doc_key(key)); }
-    function meta_get(key) { return engine.get(meta_key(key)); }
-    function meta_put(key, value) { return engine.put(meta_key(key), value); }
-    function meta_destroy(key) { return engine.destroy(meta_key(key)); }
-    function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(doc_key(), cb, done); }
-    function all_doc_keys() { return engine.all_keys(doc_key()); }
-    function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(meta_key(), cb, done); }
-    function all_meta_keys() { return engine.all_keys(meta_key()); }
+    function doc_get(key) { return engine.get(DOC_PREFIX, key); }
+    function doc_put(key, value) { return engine.put(DOC_PREFIX, key, value); }
+    function doc_destroy(key) { return engine.destroy(DOC_PREFIX, key); }
+    function meta_get(key) { return engine.get(META_PREFIX, key); }
+    function meta_put(key, value) { return engine.put(META_PREFIX, key, value); }
+    function meta_destroy(key) { return engine.destroy(META_PREFIX, key); }
+    function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(DOC_PREFIX, cb, done); }
+    function all_doc_keys() { return engine.all_keys(DOC_PREFIX); }
+    function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(META_PREFIX, cb, done); }
+    function all_meta_keys() { return engine.all_keys(META_PREFIX); }
 
     function pulled_since(val) {
-      var key = since_key();
       if (! val) {
-        return engine.get(key) || 0;
+        return engine.get(SINCE_PREFIX) || 0;
       } else {
-        return angine.put(key, val);
+        return angine.put(SINCE_PREFIX, undefined, val);
       }
     }
 

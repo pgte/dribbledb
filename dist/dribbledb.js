@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Thu Nov 24 14:27:31 2011 +0000
+ * BUILD DATE: Fri Nov 25 09:33:08 2011 +0000
  */
 
  (function() {
@@ -787,17 +787,7 @@ function remote_get(uri, cb) {
   remote('get', uri, undefined, cb);
 }
 
-// function key(base_url, type) { return STORAGE_NS + ':' + base_url + ':' + type; }
-function key(base_url, type) { return STORAGE_NS + ':' + type + ':' + base_url; }
-function global_item_key(base_url, type, id)   {
-  if (id !== undefined) {
-    base_url += ('/' + id);
-  }
-  return key(base_url, type);
-}
-function global_doc_key(base_url, id)   { return global_item_key(base_url, 'd',  id);  }
-function global_meta_key(base_url, id)   { return global_item_key(base_url, 'm', id);  }
-function global_since_key(base_url)   { return global_item_key(base_url, 's');  }var uuid = (function() {
+var uuid = (function() {
   /*
   * Generate RFC4122 (v1 and v4) UUIDs
   *
@@ -1017,45 +1007,42 @@ function global_since_key(base_url)   { return global_item_key(base_url, 's');  
   , STORAGE_NS       = 'dbd'
   ;
 
-function dribbledb(base_url, options) {function create_storage(engineConstructor) {
+function dribbledb(base_url, options) {// === keys ~========
+
+function item_key(type, id)   {
+  var str = type;
+  if (id !== undefined) {
+    str += ('/' + id);
+  }
+  return str;
+}
+var DOC_PREFIX = 'd';
+var META_PREFIX = 'm';
+var SINCE_PREFIX = 's';
+
+function create_storage(engineConstructor) {
   return function(base_url) {
-    var engine = engineConstructor();
-
-
-    // === keys ~========
-
-    function doc_key(id) {
-      return global_doc_key(base_url, id);
-    }
-
-    function meta_key(id) {
-      return global_meta_key(base_url, id);
-    }
-
-    function since_key() {
-      return global_since_key(base_url);
-    }
+    var engine = engineConstructor(base_url);
 
 
     // === data manipulation ~========
 
-    function doc_get(key) { return engine.get(doc_key(key)); }
-    function doc_put(key, value) { return engine.put(doc_key(key), value); }
-    function doc_destroy(key) { return engine.destroy(doc_key(key)); }
-    function meta_get(key) { return engine.get(meta_key(key)); }
-    function meta_put(key, value) { return engine.put(meta_key(key), value); }
-    function meta_destroy(key) { return engine.destroy(meta_key(key)); }
-    function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(doc_key(), cb, done); }
-    function all_doc_keys() { return engine.all_keys(doc_key()); }
-    function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(meta_key(), cb, done); }
-    function all_meta_keys() { return engine.all_keys(meta_key()); }
+    function doc_get(key) { return engine.get(DOC_PREFIX, key); }
+    function doc_put(key, value) { return engine.put(DOC_PREFIX, key, value); }
+    function doc_destroy(key) { return engine.destroy(DOC_PREFIX, key); }
+    function meta_get(key) { return engine.get(META_PREFIX, key); }
+    function meta_put(key, value) { return engine.put(META_PREFIX, key, value); }
+    function meta_destroy(key) { return engine.destroy(META_PREFIX, key); }
+    function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(DOC_PREFIX, cb, done); }
+    function all_doc_keys() { return engine.all_keys(DOC_PREFIX); }
+    function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(META_PREFIX, cb, done); }
+    function all_meta_keys() { return engine.all_keys(META_PREFIX); }
 
     function pulled_since(val) {
-      var key = since_key();
       if (! val) {
-        return engine.get(key) || 0;
+        return engine.get(SINCE_PREFIX) || 0;
       } else {
-        return angine.put(key, val);
+        return angine.put(SINCE_PREFIX, undefined, val);
       }
     }
 
@@ -1086,30 +1073,48 @@ function dribbledb(base_url, options) {function create_storage(engineConstructor
   };
   return create_storage(strats[strat_name]);
 }function store_strategy_webstore(base_url, store, strat_name) {
-  function browser_get(path) {
-    var document = store.getItem(path);
-    return JSON.parse(document);
+
+  function full_path(prefix, id) {
+    if (prefix.length != 1) { throw new Error('Invalid prefix: ' + prefix); }
+    var path = STORAGE_NS + ':' + prefix + ':' + base_url;
+    if ('undefined' !== typeof(id)) {
+      path += '/' + id;
+    }
+    return path;
   }
 
-  function browser_put(path, document) {
-    document = JSON.stringify(document);
-    store.setItem(path, document);
+  function browser_get(prefix, id) {
+    var doc = store.getItem(full_path(prefix, id));
+    console.log('browser_get:', id, 'doc:', doc);
+    return JSON.parse(doc);
   }
 
-  function browser_destroy(path) {
+  function browser_put(prefix, id, document) {
+    var key = full_path(prefix, id)
+      , doc = JSON.stringify(document);
+    console.log('setItem', key, doc);
+    store.setItem(key, doc);
+  }
+
+  function browser_destroy(prefix, id) {
+    var path = full_path(prefix, id);
     if (null !== store.getItem(path)) {
+      console.log('getItem', path);
       store.removeItem(path);
       return true;
     }
     return false;
   }
 
-  function browser_all_keys_iterator(path, cb, done) {
+  function browser_all_keys_iterator(prefix, cb, done) {
     var storage = store
-      , keys, i = 0;
+      , keys, i = 0
+      , path = full_path(prefix);
+
+    console.log('browser_all_keys_iterator path:', path);
 
     done = done || noop;
-
+    
     keys = (function() {
       var key
         , i
@@ -1117,15 +1122,18 @@ function dribbledb(base_url, options) {function create_storage(engineConstructor
 
       for(i = 0; i < storage.length; i ++) {
         key = storage.key(i);
+        console.log('key:', key);
         if (key && 0 === key.indexOf(path)) {
           keys.push(key);
         }
       }
       return keys;
     }());
+    
+    console.log('keys', keys);
 
     (function iterate() {
-      var key;
+      var key, retKey, val;
 
       if (i >= keys.length) { return done(); }
 
@@ -1135,22 +1143,25 @@ function dribbledb(base_url, options) {function create_storage(engineConstructor
       }
 
       key = keys[i];
-      cb(key.slice(path.length + 1), browser_get(key), next);
+      retKey = key.slice(path.length + 1);
+      val = browser_get(prefix, retKey)
+      console.log('retKey:', retKey, 'val:', val);
+      cb(retKey, val, next);
     }());
   }
 
-  function browser_all_keys(path) {
+  function browser_all_keys(prefix) {
     var keys = [];
-    browser_all_keys_iterator(path, function(key, value, done) {
+    browser_all_keys_iterator(prefix, function(key, value, done) {
       keys.push(key);
       done();
     });
+    console.log('browser_all_keys:', keys);
     return keys;
   }
 
-  if(! store) {
-    throw new Error('At the moment this only works in modern browsers');
-  }
+  if(! store) { throw new Error('At the moment this only works in modern browsers'); }
+
   return { get     : browser_get
          , put     : browser_put
          , destroy : browser_destroy
@@ -1167,27 +1178,37 @@ function store_strategy_sessionstore(base_url) {
 function store_strategy_memstore(base_url) {
   var store = {};
 
+  function full_path(prefix, id) {
+    if (prefix.length > 1) { throw new Error('Invalid prefix: ' + prefix); }
+    var path = STORAGE_NS + ':' + prefix + ':' + base_url;
+    if ('undefined' !== typeof(id)) {
+      path += '/' + id;
+    }
+    return path;
+  }
+
   function clone(o) {
     return JSON.parse(JSON.stringify(o));
   }
 
-  function mem_get(path) {
-    var o = store[path];
+  function mem_get(prefix, id) {
+    var o = store[full_path(prefix, id)];
     if ('undefined' !== typeof(o)) { return clone(o); }
     return null;
   }
 
-  function mem_put(path, document) {
-    store[path] = clone(document);
+  function mem_put(prefix, id, document) {
+    store[full_path(prefix, id)] = clone(document);
   }
 
-  function mem_destroy(path) {
-    delete store[path];
+  function mem_destroy(prefix, id) {
+    delete store[full_path(prefix, id)];
   }
 
-  function mem_all_keys_iterator(path, cb, done) {
+  function mem_all_keys_iterator(prefix, cb, done) {
     var storage = store
-      , keys, i = 0;
+      , keys, i = 0
+      , path = full_path(prefix);
 
     done = done || noop;
 
@@ -1218,9 +1239,9 @@ function store_strategy_memstore(base_url) {
     }());
   }
 
-  function mem_all_keys(path) {
+  function mem_all_keys(prefix) {
     var keys = [];
-    mem_all_keys_iterator(path, function(key, value, done) {
+    mem_all_keys_iterator(prefix, function(key, value, done) {
       keys.push(key);
       done();
     });
@@ -1385,13 +1406,13 @@ options = options || {};
 
 // ====  strategy resolving ~======
 
-options.storage_strategy = options.storage_strategy || 'localstore';
+options.storage_strategy || (options.storage_strategy = 'localstore');
 store = resolve_storage_strategy(options.storage_strategy) (base_url);
 
-options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
+options.pull_strategy || (options.pull_strategy = 'couchdb_bulk');
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
 
-options.push_strategy = options.push_strategy || 'restful_ajax';
+options.push_strategy || (options.push_strategy = 'restful_ajax');
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 

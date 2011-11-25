@@ -9,13 +9,13 @@ options = options || {};
 
 // ====  strategy resolving ~======
 
-options.storage_strategy = options.storage_strategy || 'localstore';
+options.storage_strategy || (options.storage_strategy = 'localstore');
 store = resolve_storage_strategy(options.storage_strategy) (base_url);
 
-options.pull_strategy = options.pull_strategy || 'couchdb_bulk';
+options.pull_strategy || (options.pull_strategy = 'couchdb_bulk');
 pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
 
-options.push_strategy = options.push_strategy || 'restful_ajax';
+options.push_strategy || (options.push_strategy = 'restful_ajax');
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 

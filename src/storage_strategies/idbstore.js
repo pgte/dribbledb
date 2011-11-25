@@ -1,6 +1,10 @@
-function store_strategy_idbtore() {
+function store_strategy_idbtore(base_url) {
   
   
+  
+  function idb_get(path) {
+    
+  }
   
   return { get     : idb_get
          , put     : idb_put
