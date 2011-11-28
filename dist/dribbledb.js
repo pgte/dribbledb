@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Fri Nov 25 09:33:08 2011 +0000
+ * BUILD DATE: Fri Nov 25 11:04:26 2011 +0000
  */
 
  (function() {
@@ -56,7 +56,7 @@ EventEmitter.prototype.on = function(event, fn){
 EventEmitter.prototype.emit = function(event){
   var args = slice.call(arguments, 1)
     , callbacks = this.callbacks[event]
-    , i;
+    , i, len;
 
   if (callbacks && callbacks.length > 0) {
     for (i = 0, len = callbacks.length; i < len; ++i) {
@@ -169,7 +169,7 @@ var request = (function(exports){
       , pairs = str.split('&')
       , parts
       , pair
-      , i;
+      , i, len;
 
     for (i = 0, len = pairs.length; i < len; ++i) {
       pair = pairs[i];
@@ -244,7 +244,7 @@ var request = (function(exports){
       , line
       , field
       , val
-      , i;
+      , i, len;
 
     lines.pop(); // trailing CRLF
 
@@ -347,7 +347,7 @@ var request = (function(exports){
 
   Response.prototype.setParams = function(params){
     var param
-      , i;
+      , i, len;
     for (i = 0, len = params.length; i < len; ++i) {
       param = params[i].split(/ *= */);
       this[param[0]] = param[1];
@@ -1027,22 +1027,26 @@ function create_storage(engineConstructor) {
 
     // === data manipulation ~========
 
-    function doc_get(key) { return engine.get(DOC_PREFIX, key); }
-    function doc_put(key, value) { return engine.put(DOC_PREFIX, key, value); }
-    function doc_destroy(key) { return engine.destroy(DOC_PREFIX, key); }
-    function meta_get(key) { return engine.get(META_PREFIX, key); }
-    function meta_put(key, value) { return engine.put(META_PREFIX, key, value); }
-    function meta_destroy(key) { return engine.destroy(META_PREFIX, key); }
+    function doc_get(key, cb) { return engine.get(DOC_PREFIX, key, cb); }
+    function doc_put(key, value, cb) { return engine.put(DOC_PREFIX, key, value, cb); }
+    function doc_destroy(key, cb) { return engine.destroy(DOC_PREFIX, key, cb); }
+    function meta_get(key, cb) { return engine.get(META_PREFIX, key, cb); }
+    function meta_put(key, value, cb) { return engine.put(META_PREFIX, key, value, cb); }
+    function meta_destroy(key, cb) { return engine.destroy(META_PREFIX, key, cb); }
     function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(DOC_PREFIX, cb, done); }
-    function all_doc_keys() { return engine.all_keys(DOC_PREFIX); }
+    function all_doc_keys(cb) { return engine.all_keys(DOC_PREFIX, cb); }
     function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(META_PREFIX, cb, done); }
-    function all_meta_keys() { return engine.all_keys(META_PREFIX); }
+    function all_meta_keys(cb) { return engine.all_keys(META_PREFIX, cb); }
 
-    function pulled_since(val) {
+    function pulled_since(val, cb) {
+      if ('function' !== typeof(cb)) { throw new Error('2nd argument must be a function'); }
       if (! val) {
-        return engine.get(SINCE_PREFIX) || 0;
+        engine.get(SINCE_PREFIX, undefined, function(err, val) {
+          if (err) { return cb(err); }
+          cb(null, val || 0);
+        });
       } else {
-        return angine.put(SINCE_PREFIX, undefined, val);
+        return engine.put(SINCE_PREFIX, undefined, val, cb);
       }
     }
 
@@ -1065,13 +1069,63 @@ function create_storage(engineConstructor) {
       , pulled_since   : pulled_since
     }
   }
-}function resolve_storage_strategy(strat_name) {
-  var strats = {
-      'localstore'   : store_strategy_localstore
-    , 'sessionstore' : store_strategy_sessionstore
-    , 'memstore'     : store_strategy_memstore
-  };
-  return create_storage(strats[strat_name]);
+}function store_strategy_idbstore(base_url) {
+  
+  var idb = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
+  var db = idb.open(STORAGE_NS);
+  var dbs_enum = ['d', 'm', 's'];
+  
+  var stores = {};
+  (function() {
+    var dbName;
+    for (var i in dbs_enum) {
+      dbName = dbs_enum[i];
+      stores[dbName] = db.createObjectStore(dbName + ':' + base_url)
+    }
+  }());
+  
+  function idb_get(prefix, id) {
+    stores[prefix].get(id);
+  }
+  
+  function idb_put(prefix, id, value) {
+    stores[prefix].add(value, id);
+  }
+  
+  function idb_destroy(prefix, id) {
+    stores[prefix].delete(id);
+  }
+  
+  function idb_all_keys_iterator(prefix, cb, done) {
+    var val;
+    stores[prefix].openCursor();
+    function next() {
+      if (! cursor.continue()) {
+        done();
+      } else {
+        val = cursor.value;
+        cb(val.id, val, next);
+      }
+    }
+  }
+  
+  
+  function idb_all_keys(prefix) {
+    var keys = [];
+    browser_all_keys_iterator(prefix, function(key, value, done) {
+      keys.push(key);
+      done();
+    });
+    return keys;
+  }
+  
+  return { get     : idb_get
+         , put     : idb_put
+         , destroy : idb_destroy
+         , all_keys_iterator: idb_all_keys_iterator
+         , all_keys: idb_all_keys
+         , stratName: 'idbstore'
+         };
 }function store_strategy_webstore(base_url, store, strat_name) {
 
   function full_path(prefix, id) {
@@ -1083,35 +1137,34 @@ function create_storage(engineConstructor) {
     return path;
   }
 
-  function browser_get(prefix, id) {
+  function browser_get(prefix, id, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var doc = store.getItem(full_path(prefix, id));
-    console.log('browser_get:', id, 'doc:', doc);
-    return JSON.parse(doc);
+    cb(null, JSON.parse(doc));
   }
 
-  function browser_put(prefix, id, document) {
+  function browser_put(prefix, id, document, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var key = full_path(prefix, id)
       , doc = JSON.stringify(document);
-    console.log('setItem', key, doc);
     store.setItem(key, doc);
+    cb();
   }
 
-  function browser_destroy(prefix, id) {
+  function browser_destroy(prefix, id, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var path = full_path(prefix, id);
     if (null !== store.getItem(path)) {
-      console.log('getItem', path);
       store.removeItem(path);
-      return true;
+      return cb(null, true);
     }
-    return false;
+    return cb(null, false);
   }
 
   function browser_all_keys_iterator(prefix, cb, done) {
     var storage = store
       , keys, i = 0
       , path = full_path(prefix);
-
-    console.log('browser_all_keys_iterator path:', path);
 
     done = done || noop;
     
@@ -1122,7 +1175,6 @@ function create_storage(engineConstructor) {
 
       for(i = 0; i < storage.length; i ++) {
         key = storage.key(i);
-        console.log('key:', key);
         if (key && 0 === key.indexOf(path)) {
           keys.push(key);
         }
@@ -1130,10 +1182,8 @@ function create_storage(engineConstructor) {
       return keys;
     }());
     
-    console.log('keys', keys);
-
     (function iterate() {
-      var key, retKey, val;
+      var key, retKey;
 
       if (i >= keys.length) { return done(); }
 
@@ -1144,20 +1194,22 @@ function create_storage(engineConstructor) {
 
       key = keys[i];
       retKey = key.slice(path.length + 1);
-      val = browser_get(prefix, retKey)
-      console.log('retKey:', retKey, 'val:', val);
-      cb(retKey, val, next);
+      browser_get(prefix, retKey, function(err, val) {
+        if (err) { return done(err); }
+        cb(retKey, val, next);
+      });
     }());
   }
 
-  function browser_all_keys(prefix) {
+  function browser_all_keys(prefix, done) {
     var keys = [];
-    browser_all_keys_iterator(prefix, function(key, value, done) {
+    browser_all_keys_iterator(prefix, function(key, value, next) {
       keys.push(key);
-      done();
+      next();
+    }, function(err) {
+      if (err) { return done(err); };
+      done(null, keys);
     });
-    console.log('browser_all_keys:', keys);
-    return keys;
   }
 
   if(! store) { throw new Error('At the moment this only works in modern browsers'); }
@@ -1191,18 +1243,21 @@ function store_strategy_memstore(base_url) {
     return JSON.parse(JSON.stringify(o));
   }
 
-  function mem_get(prefix, id) {
-    var o = store[full_path(prefix, id)];
-    if ('undefined' !== typeof(o)) { return clone(o); }
-    return null;
+  function mem_get(prefix, id, cb) {
+    var o = store[full_path(prefix, id)]
+      , val = null;
+    if ('undefined' !== typeof(o)) { val = clone(o); }
+    cb(null, val);
   }
 
-  function mem_put(prefix, id, document) {
+  function mem_put(prefix, id, document, cb) {
     store[full_path(prefix, id)] = clone(document);
+    cb(null, id);
   }
 
-  function mem_destroy(prefix, id) {
+  function mem_destroy(prefix, id, cb) {
     delete store[full_path(prefix, id)];
+    cb(null);
   }
 
   function mem_all_keys_iterator(prefix, cb, done) {
@@ -1239,13 +1294,13 @@ function store_strategy_memstore(base_url) {
     }());
   }
 
-  function mem_all_keys(prefix) {
+  function mem_all_keys(prefix, cb) {
     var keys = [];
     mem_all_keys_iterator(prefix, function(key, value, done) {
       keys.push(key);
       done();
     });
-    return keys;
+    cb(null, keys);
   }
 
   return { get     : mem_get
@@ -1255,6 +1310,14 @@ function store_strategy_memstore(base_url) {
          , all_keys: mem_all_keys
          , stratName: 'memstore'
          };
+}function resolve_storage_strategy(strat_name) {
+  var strats = {
+      'idbstore'     : store_strategy_idbstore
+    , 'localstore'   : store_strategy_localstore
+    , 'sessionstore' : store_strategy_sessionstore
+    , 'memstore'     : store_strategy_memstore
+  };
+  return create_storage(strats[strat_name]);
 }function resolve_pull_strategy(strat_name) {
   var strat;
   if ('function' === typeof(strat_name)) { strat = strat_name; }
@@ -1269,68 +1332,82 @@ function store_strategy_memstore(base_url) {
   }
   return strat;
 }function pull_strategy_couchdb_bulk() {
-  var uri = base_url + '/_changes?since=' + pulled_since() + '&include_docs=true';
+
   return function(resolveConflicts, cb) {
+
     var calledback = false;
-    
-    remote_get(uri, function(err, resp) {
-      var i, body, results, change, key, theirs, err2, mine;
 
+    pulled_since(function(err, since) {
       if (err) { return cb(err); }
-      if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
-      if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
-      body = resp.body;
-      if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
-      if (! body.hasOwnProperty('last_seq')) {
-        err2 = new Error('response body does not have .last_seq: ' + uri);
-        err2.body = body;
-        return cb(err2);
-      }
-      if (! body.hasOwnProperty('results')) {
-        err2 = new Error('response body does not have .results: ' + uri);
-        err2.body = body;
-        return cb(err2);
-      }
 
-      results = body.results;
-      i = -1;
+      var uri = base_url + '/_changes?since=' + since + '&include_docs=true';
 
-      (function next() {
-        i += 1;
-        if (i < results.length) {
-          change = results[i];
-          key = change.id;
-          theirs = change.doc;
-          if (store.meta.get(key)) {
-            if (resolveConflicts) {
-              mine = store.doc_get(key);
-              resolveConflicts(mine, theirs, function(resolved) {
-                put(key, resolved);
-                next();
-              });
-            } else {
-              err2 = new Error('Conflict');
-              err2.key = key;
-              err2.mine = mine;
-              err2.theirs = theirs;
-              return cb(err2);
-            }
-          } else {
-            if (change.deleted) { remote_destroy(key); }
-            else { remote_put(key, theirs); }
 
-            next();
-          }
-        } else {
-          // finished
-          pulled_since(body.last_seq);
-          cb();
+      remote_get(uri, function(err, resp) {
+        var i, body, results, change, key, theirs, err2, mine;
+
+        if (err) { return cb(err); }
+        if (! resp.ok) { return cb(new Error('Pull response not ok for URI: ' + uri)); }
+        if (! resp.body) { return cb(new Error('Pull response does not have body for URI: ' + uri)); }
+        body = resp.body;
+        if ('object' !== typeof(body)) { return cb(new Error('Pull response body is not object for URI: ' + uri)); }
+        if (! body.hasOwnProperty('last_seq')) {
+          err2 = new Error('response body does not have .last_seq: ' + uri);
+          err2.body = body;
+          return cb(err2);
         }
-      }());
+        if (! body.hasOwnProperty('results')) {
+          err2 = new Error('response body does not have .results: ' + uri);
+          err2.body = body;
+          return cb(err2);
+        }
+
+        results = body.results;
+        i = -1;
+
+        (function next() {
+          i += 1;
+          if (i < results.length) {
+            change = results[i];
+            key = change.id;
+            theirs = change.doc;
+            store.meta.get(key, function(err, metaVal) {
+              if (err) { return cb(err); }
+              if (metaVal) {
+                if (resolveConflicts) {
+                  store.doc_get(key, function(err, mine) {
+                    if (err) { return cb(err); }
+                    resolveConflicts(mine, theirs, function(resolved) {
+                      put(key, resolved, cb);
+                      next();
+                    });
+                  });
+                } else {
+                  err2 = new Error('Conflict');
+                  err2.key = key;
+                  err2.mine = mine;
+                  err2.theirs = theirs;
+                  return cb(err2);
+                }
+              } else {
+                if (change.deleted) { remote_destroy(key); }
+                else {
+                  remote_put(key, theirs, function(err) {
+                    if (err) { return cb(err); }
+                    next();
+                  });
+                }
+              }
+            });
+          } else {
+            // finished
+            pulled_since(body.last_seq, cb);
+          }
+        }());
+      });
     });
   }
-};
-function resolve_push_strategy(strat_name) {
+};function resolve_push_strategy(strat_name) {
   var strat;
   if ('function' === typeof(strat_name)) { strat = strat_name; }
   else {
@@ -1352,50 +1429,51 @@ function resolve_push_strategy(strat_name) {
       var method
         , op = value.charAt(0)
         , rev = value.substr(1)
-        , mine = get(key)
         , uri = base_url + '/' + key;
 
       method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
       if (! method) { throw new Error('Invalid meta action: ' + value); }
-
       if (rev) { uri += '?rev=' + rev; }
 
-      function handleResponse(err, res) {
-        if (err) { return cb(err); }
-
-        // ======= conflict! ~==
-
-        if (res.conflict) {
-          remote_get(uri, function(err, resp) {
+      get(key, function(err, mine) {
+          function handleResponse(err, res) {
             if (err) { return cb(err); }
-            if (resolveConflicts) {
-              resolveConflicts(mine, resp.body, function(resolved) {
-                put(key, resolved);
-                push_one(key, value, done);
+
+            // ======= conflict! ~==
+
+            if (res.conflict) {
+              remote_get(uri, function(err, resp) {
+                if (err) { return cb(err); }
+                if (resolveConflicts) {
+                  resolveConflicts(mine, resp.body, function(resolved) {
+                    put(key, resolved);
+                    push_one(key, value, done);
+                  });
+                } else {
+                  err = new Error('Conflict');
+                  err.key = key;
+                  err.mine = mine;
+                  err.theirs = resp.body;
+                  return cb(err);
+                }
               });
             } else {
-              err = new Error('Conflict');
-              err.key = key;
-              err.mine = mine;
-              err.theirs = resp.body;
-              return cb(err);
+              if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
+              store.meta.destroy(key, function(err) {
+                if (err) { return cb(err); }
+                done();
+              });
             }
-          });
-        } else {
-          if (('del' !== method || ! res.notFound) && ! res.ok) { return cb(new Error(method + ' ' + uri + ' failed with response status ' + res.status + ': ' + res.text)); }
-          store.meta.destroy(key);
-          done();
-        }
-      }
+          }
 
-      remote(method, uri, mine, handleResponse);
+          remote(method, uri, mine, handleResponse);
+        
+      });
     }
-
-    
     unsynced_keys_iterator(push_one, cb);
   }
 }
-var that = {}
+var that = new EventEmitter()
   , sync
   , store
   , pull_strategy
@@ -1415,76 +1493,127 @@ pull_strategy = resolve_pull_strategy(options.pull_strategy) ();
 options.push_strategy || (options.push_strategy = 'restful_ajax');
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
-
 // ============================= DB manipulation  ~===
 
-function unsynced_keys() {
-  return store.meta.all_keys();
+function unsynced_keys(cb) {
+  return store.meta.all_keys(cb);
 }
 
 function unsynced_keys_iterator(cb, done) {
   store.meta.all_keys_iterator(cb, done);
 }
 
-function pulled_since(val) {
-  return store.pulled_since();
+function pulled_since(val, cb) {
+  if (arguments.length < 2) { cb = val; val = undefined; }
+  return store.pulled_since(val, cb);
 }
 
-function put(key, value) {
-  if (arguments.length < 2) {
-    value = key;
-    key = value.id || value._id || uuid();
+function error_callback(err) {
+  if (err) { that.emit('error', err); }
+}
+
+function put(key, value, callback) {
+  if (arguments.length < 3) {
+    if ('function' === typeof(value)) {
+      callback = value;
+      value = key;
+      key = value.id || value._id || uuid();
+    } else {
+      callback = error_callback;
+    }
   }
+  
   if (! value.id || value._id) { value._id = key; }
-  store.doc.put(key, value);
-  store.meta.put(key, 'p');
+  store.doc.put(key, value, function(err) {
+    if (err) { return callback(err); }
+    store.meta.put(key, 'p', function(err) {
+      if (err) { return callback(err); }
+      callback(null, key);
+    });
+  });
   return key;
 }
 
-function remote_put(key, value) {
-  return store.doc.put(key, value);
+function remote_put(key, value, cb) {
+  if (! cb) { cb = error_callback; }
+  return store.doc.put(key, value, cb);
 }
 
-function get(key) {
-  return store.doc.get(key);
+function get(key, cb) {
+  if (! cb) { cb = error_callback; }
+  return store.doc.get(key, cb);
 }
 
-function destroy(key) {
+function destroy(key, cb) {
   var meta_value = 'd';
-  var old = get(key);
-  if (old && old._rev) { meta_value += old._rev; }
-  if (store.doc.destroy(key)) {
-    store.meta.put(key, meta_value);
+  get(key, function(err, old) {
+    if (err) { return cb(err); }
+    if (old && old._rev) { meta_value += old._rev; }
+    store.doc.destroy(key, function(err, destroyed) {
+      if (err) { return cb(err); }
+      if (destroyed) {
+        store.meta.put(key, meta_value, cb);
+      } else {
+        cb();
+      }
+    });
+  });
+}
+
+function remote_destroy(key, cb) {
+  store.doc.destroy(key, cb);
+}
+
+function all(callback) {
+  var ret = [];
+
+  function cb(key, value, done) {
+    ret.push(value);
+    done();
   }
-}
-
-function remote_destroy(key) {
-  store.doc.destroy(key);
-}
-
-function all(cb, done) {
-  var ret;
-
-  if ('function' !== typeof(cb)) {
-    ret = [];
-    cb = function(key, value, done) {
-      ret.push(value);
-      done();
-    };
+  
+  function done(err) {
+    if (err) { return callback(err); }
+    callback(null, ret);
   }
   
   store.doc.all_keys_iterator(cb, done);
-  return ret;
 }
 
-function nuke() {
-  store.doc.all_keys().forEach(function(key) {
-    store.doc.destroy(key);
-  });
-  store.meta.all_keys().forEach(function(key) {
-    store.meta.destroy(key);
-  });
-  return true;
+function nuke(cb) {
+  (function(done) {
+    store.doc.all_keys(function(err, keys) {
+      if (err) { return cb(err); }
+      var key, i = -1;
+      (function next() {
+        i += 1;
+        if (i >= keys.length) {
+         return done(); 
+        }
+        key = keys[i];
+        store.doc.destroy(key, function(err) {
+          if (err) { return cb(err); }
+          next();
+        });
+      }());
+    });
+  }(function() {
+    store.meta.all_keys(function(err, keys) {
+      if (err) { return cb(err); }
+      var key, i = -1;
+      (function next() {
+        i += 1;
+        if (i >= keys.length) {
+         return cb(); 
+        }
+        key = keys[i];
+        store.meta.destroy(key, function(err) {
+          if (err) { return cb(err); }
+          next();
+        });
+      }());
+    });
+  }));
 }
 
 // ======================= sync   ~==
@@ -1515,13 +1644,7 @@ sync = (function() {
     }
 
     function error(err) {
-      if (err) {
-        if (! callback(err)) {
-          syncEmitter.emit('error', err);
-        }
-        return true;
-      }
-      return false;
+      if (err && ! callback(err)) { syncEmitter.emit('error', err); }
     }
 
     push(resolveConflicts, function(err) {
@@ -1564,9 +1687,10 @@ if ('function' === typeof(define) && define.amd) {
 else {
   root.dribbledb = dribbledb;
 }(function() {
-  var strategies_order = ['localstore', 'sessionstore', 'memstore'];
+  var strategies_order = ['idbstore', 'localstore', 'sessionstore', 'memstore'];
   var scannableStrategies = {
-      localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
+      idbstore   : function() { return 'undefined' !== typeof(window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB); }
+    , localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
     , sessionstore : function() { return (typeof(window.sessionStorage) !== 'undefined'); }
     , memstore     : function() { return true; }
   };

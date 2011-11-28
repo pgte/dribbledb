@@ -18,22 +18,26 @@ function create_storage(engineConstructor) {
 
     // === data manipulation ~========
 
-    function doc_get(key) { return engine.get(DOC_PREFIX, key); }
-    function doc_put(key, value) { return engine.put(DOC_PREFIX, key, value); }
-    function doc_destroy(key) { return engine.destroy(DOC_PREFIX, key); }
-    function meta_get(key) { return engine.get(META_PREFIX, key); }
-    function meta_put(key, value) { return engine.put(META_PREFIX, key, value); }
-    function meta_destroy(key) { return engine.destroy(META_PREFIX, key); }
+    function doc_get(key, cb) { return engine.get(DOC_PREFIX, key, cb); }
+    function doc_put(key, value, cb) { return engine.put(DOC_PREFIX, key, value, cb); }
+    function doc_destroy(key, cb) { return engine.destroy(DOC_PREFIX, key, cb); }
+    function meta_get(key, cb) { return engine.get(META_PREFIX, key, cb); }
+    function meta_put(key, value, cb) { return engine.put(META_PREFIX, key, value, cb); }
+    function meta_destroy(key, cb) { return engine.destroy(META_PREFIX, key, cb); }
     function all_doc_keys_iterator(cb, done) { return engine.all_keys_iterator(DOC_PREFIX, cb, done); }
-    function all_doc_keys() { return engine.all_keys(DOC_PREFIX); }
+    function all_doc_keys(cb) { return engine.all_keys(DOC_PREFIX, cb); }
     function all_meta_keys_iterator(cb, done) { return engine.all_keys_iterator(META_PREFIX, cb, done); }
-    function all_meta_keys() { return engine.all_keys(META_PREFIX); }
+    function all_meta_keys(cb) { return engine.all_keys(META_PREFIX, cb); }
 
-    function pulled_since(val) {
+    function pulled_since(val, cb) {
+      if ('function' !== typeof(cb)) { throw new Error('2nd argument must be a function'); }
       if (! val) {
-        return engine.get(SINCE_PREFIX) || 0;
+        engine.get(SINCE_PREFIX, undefined, function(err, val) {
+          if (err) { return cb(err); }
+          cb(null, val || 0);
+        });
       } else {
-        return angine.put(SINCE_PREFIX, undefined, val);
+        return engine.put(SINCE_PREFIX, undefined, val, cb);
       }
     }
 

@@ -9,24 +9,28 @@ function store_strategy_webstore(base_url, store, strat_name) {
     return path;
   }
 
-  function browser_get(prefix, id) {
+  function browser_get(prefix, id, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var doc = store.getItem(full_path(prefix, id));
-    return JSON.parse(doc);
+    cb(null, JSON.parse(doc));
   }
 
-  function browser_put(prefix, id, document) {
+  function browser_put(prefix, id, document, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var key = full_path(prefix, id)
       , doc = JSON.stringify(document);
     store.setItem(key, doc);
+    cb();
   }
 
-  function browser_destroy(prefix, id) {
+  function browser_destroy(prefix, id, cb) {
+    if ('function' !== typeof(cb)) { throw new Error('3rd argument must be a function'); }
     var path = full_path(prefix, id);
     if (null !== store.getItem(path)) {
       store.removeItem(path);
-      return true;
+      return cb(null, true);
     }
-    return false;
+    return cb(null, false);
   }
 
   function browser_all_keys_iterator(prefix, cb, done) {
@@ -51,7 +55,7 @@ function store_strategy_webstore(base_url, store, strat_name) {
     }());
     
     (function iterate() {
-      var key, retKey, val;
+      var key, retKey;
 
       if (i >= keys.length) { return done(); }
 
@@ -62,19 +66,22 @@ function store_strategy_webstore(base_url, store, strat_name) {
 
       key = keys[i];
       retKey = key.slice(path.length + 1);
-      val = browser_get(prefix, retKey)
-      cb(retKey, val, next);
+      browser_get(prefix, retKey, function(err, val) {
+        if (err) { return done(err); }
+        cb(retKey, val, next);
+      });
     }());
   }
 
-  function browser_all_keys(prefix) {
+  function browser_all_keys(prefix, done) {
     var keys = [];
-    browser_all_keys_iterator(prefix, function(key, value, done) {
+    browser_all_keys_iterator(prefix, function(key, value, next) {
       keys.push(key);
-      done();
+      next();
+    }, function(err) {
+      if (err) { return done(err); };
+      done(null, keys);
     });
-    console.log('browser_all_keys:', keys);
-    return keys;
   }
 
   if(! store) { throw new Error('At the moment this only works in modern browsers'); }

@@ -14,18 +14,21 @@ function store_strategy_memstore(base_url) {
     return JSON.parse(JSON.stringify(o));
   }
 
-  function mem_get(prefix, id) {
-    var o = store[full_path(prefix, id)];
-    if ('undefined' !== typeof(o)) { return clone(o); }
-    return null;
+  function mem_get(prefix, id, cb) {
+    var o = store[full_path(prefix, id)]
+      , val = null;
+    if ('undefined' !== typeof(o)) { val = clone(o); }
+    cb(null, val);
   }
 
-  function mem_put(prefix, id, document) {
+  function mem_put(prefix, id, document, cb) {
     store[full_path(prefix, id)] = clone(document);
+    cb(null, id);
   }
 
-  function mem_destroy(prefix, id) {
+  function mem_destroy(prefix, id, cb) {
     delete store[full_path(prefix, id)];
+    cb(null);
   }
 
   function mem_all_keys_iterator(prefix, cb, done) {
@@ -62,13 +65,13 @@ function store_strategy_memstore(base_url) {
     }());
   }
 
-  function mem_all_keys(prefix) {
+  function mem_all_keys(prefix, cb) {
     var keys = [];
     mem_all_keys_iterator(prefix, function(key, value, done) {
       keys.push(key);
       done();
     });
-    return keys;
+    cb(null, keys);
   }
 
   return { get     : mem_get

@@ -96,7 +96,7 @@ var request = (function(exports){
       , pairs = str.split('&')
       , parts
       , pair
-      , i;
+      , i, len;
 
     for (i = 0, len = pairs.length; i < len; ++i) {
       pair = pairs[i];
@@ -171,7 +171,7 @@ var request = (function(exports){
       , line
       , field
       , val
-      , i;
+      , i, len;
 
     lines.pop(); // trailing CRLF
 
@@ -274,7 +274,7 @@ var request = (function(exports){
 
   Response.prototype.setParams = function(params){
     var param
-      , i;
+      , i, len;
     for (i = 0, len = params.length; i < len; ++i) {
       param = params[i].split(/ *= */);
       this[param[0]] = param[1];

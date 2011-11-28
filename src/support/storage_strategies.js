@@ -1,7 +1,8 @@
 (function() {
-  var strategies_order = ['localstore', 'sessionstore', 'memstore'];
+  var strategies_order = ['idbstore', 'localstore', 'sessionstore', 'memstore'];
   var scannableStrategies = {
-      localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
+      idbstore   : function() { return 'undefined' !== typeof(window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB); }
+    , localstore   : function() { return (typeof(window.localStorage) !== 'undefined'); }
     , sessionstore : function() { return (typeof(window.sessionStorage) !== 'undefined'); }
     , memstore     : function() { return true; }
   };

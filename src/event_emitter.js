@@ -35,7 +35,7 @@ EventEmitter.prototype.on = function(event, fn){
 EventEmitter.prototype.emit = function(event){
   var args = slice.call(arguments, 1)
     , callbacks = this.callbacks[event]
-    , i;
+    , i, len;
 
   if (callbacks && callbacks.length > 0) {
     for (i = 0, len = callbacks.length; i < len; ++i) {

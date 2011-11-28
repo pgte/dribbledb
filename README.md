@@ -35,17 +35,20 @@ You can also pass some options on the second argument like this:
 
 ### put:
 
-    db.put('key', 'value');
+    db.put('key', 'value', [callback(err, id)]);
 
 Or you can just provide the value:
 
-    db.put(obj);
+    db.put(obj, [callback]);
+
+Returns the id of the object.
 
 If `obj` has an `_id` or `id` attribute, then no new value is created.
 
 If it does not, a new ID is created (using node-uuid).
 
 When an object is stored and doesn't have an `_id` or `id` attribute, an attribute named `_id` is created with the key value.
+
 
 ### get:
 
@@ -100,7 +103,15 @@ If you like you can omit the callback. In that case, if an error is caught, db.s
       if (err) { return throw err; }
     });
 
-### callbacks when syncing:
+### Database Events:
+
+#### "error"
+
+    db.on('error', function(err) {
+      console.log('Error caught: ' + err.message);
+    });
+
+### Events when syncing:
 
 #### "error"
 
