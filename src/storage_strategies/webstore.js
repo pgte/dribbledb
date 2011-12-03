@@ -83,6 +83,10 @@ function store_strategy_webstore(base_url, store, strat_name) {
       done(null, keys);
     });
   }
+  
+  function ready(cb) {
+    cb();
+  }
 
   if(! store) { throw new Error('At the moment this only works in modern browsers'); }
 
@@ -92,5 +96,6 @@ function store_strategy_webstore(base_url, store, strat_name) {
          , all_keys_iterator: browser_all_keys_iterator
          , all_keys: browser_all_keys
          , stratName: strat_name
+         , ready: ready
          };
 }

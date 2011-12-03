@@ -43,6 +43,7 @@ function create_storage(engineConstructor) {
 
     return {
         stratName      : engine.stratName
+      , internalName   : engine.internalName
       , doc : {
             get        : doc_get
           , put        : doc_put
@@ -58,6 +59,7 @@ function create_storage(engineConstructor) {
         , all_keys  : all_meta_keys
       }
       , pulled_since   : pulled_since
+      , ready: engine.ready
     }
   }
 }

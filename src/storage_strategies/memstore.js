@@ -73,12 +73,17 @@ function store_strategy_memstore(base_url) {
     });
     cb(null, keys);
   }
+  
+  function ready(cb) {
+    cb();
+  }
 
   return { get     : mem_get
          , put     : mem_put
          , destroy : mem_destroy
          , all_keys_iterator: mem_all_keys_iterator
          , all_keys: mem_all_keys
+         , ready: ready
          , stratName: 'memstore'
          };
 }

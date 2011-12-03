@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Fri Nov 25 11:04:26 2011 +0000
+ * BUILD DATE: Mon Nov 28 12:14:58 2011 +0000
  */
 
  (function() {
@@ -1052,6 +1052,7 @@ function create_storage(engineConstructor) {
 
     return {
         stratName      : engine.stratName
+      , internalName   : engine.internalName
       , doc : {
             get        : doc_get
           , put        : doc_put
@@ -1067,65 +1068,206 @@ function create_storage(engineConstructor) {
         , all_keys  : all_meta_keys
       }
       , pulled_since   : pulled_since
+      , ready: engine.ready
     }
   }
-}function store_strategy_idbstore(base_url) {
-  
-  var idb = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
-  var db = idb.open(STORAGE_NS);
-  var dbs_enum = ['d', 'm', 's'];
-  
-  var stores = {};
-  (function() {
+}var stores = {};
+function store_strategy_idbstore(base_url) {
+
+  // Singleton for each DB (url)
+  if (stores[base_url]) { return stores[base_url]; }
+
+  var store = (function() {
+    var DB_VERSION = '1.2';
+    var idb = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
+    var consts = window.IDBTransaction || window.webkitIDBTransaction || window.msIndexedDB;
+    var IDBDatabaseException = window.IDBDatabaseException || window.webkitIDBDatabaseException;
+    var errorCodes = Object.keys(IDBDatabaseException);
+    var IDBKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange;
+
     var dbName;
-    for (var i in dbs_enum) {
-      dbName = dbs_enum[i];
-      stores[dbName] = db.createObjectStore(dbName + ':' + base_url)
+    var db;
+    var dbs_enum = ['d', 'm', 's'];
+
+    var stores = {};
+    var ready = false;
+    var initializing = false;
+    var initializationError;
+
+    var readyQueue = [];
+    
+    function decodeErrorEvent(evt) {
+      var code = evt.target.errorCode;
+      var message = errorCodes[code].toLowerCase();
+      var err = new Error(message);
+      err.code = code;
+      err.event = evt;
+      return err;
     }
-  }());
-  
-  function idb_get(prefix, id) {
-    stores[prefix].get(id);
-  }
-  
-  function idb_put(prefix, id, value) {
-    stores[prefix].add(value, id);
-  }
-  
-  function idb_destroy(prefix, id) {
-    stores[prefix].delete(id);
-  }
-  
-  function idb_all_keys_iterator(prefix, cb, done) {
-    var val;
-    stores[prefix].openCursor();
-    function next() {
-      if (! cursor.continue()) {
-        done();
+    
+    function proxyErrorEvent(cb) {
+      return function(evt) {
+        cb(decodeErrorEvent(evt));
+      }
+    } 
+
+    function setDBVersion(cb) {
+      if (db.version !== DB_VERSION) {
+        var versionReq = db.setVersion(DB_VERSION);
+        
+        versionReq.onerror = versionReq.onblocked = proxyErrorEvent(cb);
+        versionReq.onsuccess = function(event) {
+          console.log('222');
+          cb();
+        }
       } else {
-        val = cursor.value;
-        cb(val.id, val, next);
+        cb();
       }
     }
-  }
+
+    function initializeDB(cb) {
+      dbName = STORAGE_NS + '::' + base_url;
+      var openRequest = idb.open(dbName, 'DribbleDB', {keyPath: '_id'});
+      openRequest.onerror = proxyErrorEvent(cb);
+      openRequest.onsuccess = function(event) {
+        db = event.target.result;
+        setDBVersion(function(err, init) {
+          if (err) { return cb(err); }
+          var i = -1;
+          (function next() {
+            var db_name;
+            i += 1;
+            if (i >= dbs_enum.length) { return cb(); }
+            db_name = dbs_enum[i];
+            if (db.objectStoreNames.contains(db_name)) {
+              var emptyTransaction = db.transaction([], consts.READ_ONLY);
+              stores[db_name] = emptyTransaction.objectStore(db_name);
+              next();
+            } else {
+              stores[db_name] = db.createObjectStore(db_name, { keyPath: '_id'});
+              next();
+            }
+          }());
+        });
+      };
+    }
+
+    function onStoreReady(cb) {
+      if ('function' !== typeof(cb)) { throw new Error('onStoreReady needs callabck function'); }
+      if (ready) {
+        cb();
+      } else {
+        if (! initializing) {
+          initializing = true;
+          initializeDB(function(err) {
+            initializing = false;
+            if (err) { initializationError = err; }
+            setTimeout(function() {
+              ready = true;
+              for(var i in readyQueue) {
+                readyQueue[i](initializationError);
+              }
+              cb();
+            }, 0);
+          });
+        } else {
+          if (initializationError) { return cb(initializationError); }
+          readyQueue.push(cb)
+        }
+      }
+    }
+
+    function idb_get(prefix, id, cb) {
+      onStoreReady(function(err) {
+        if (err) { return cb(err); }
+        var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
+        getRequest.onsuccess = function(event) {
+          setTimeout(function() {
+            cb(null, event.target.result);
+          }, 0);
+        };
+        getRequest.onerror = proxyErrorEvent(cb);
+      });
+    }
+
+    function idb_put(prefix, id, value, cb) {
+      onStoreReady(function(err) {
+        if (err) { return cb(err); }
+        value._id || (value._id = id);
+        console.log('putting', value, typeof(value));
+        var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).put(value);
+        putRequest.onsuccess = function(event){
+          console.log('success');
+          setTimeout(function() {
+            cb(null, event.target.result);
+          }, 0)
+        };
+        putRequest.onerror = proxyErrorEvent(cb);
+      });
+    }
+
+    function idb_destroy(prefix, id, cb) {
+      onStoreReady(function(err) {
+        if (err) { return cb(err); }
+        var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).delete(id);
+        putRequest.onsuccess = function(event){
+          setTimeout(function() {
+            cb(null, event.target.result);
+          }, 0);
+        };
+        putRequest.onerror = proxyErrorEvent(cb);
+      });
+    }
+
+    function idb_all_keys_iterator(prefix, cb, done) {
+      console.log('idb_all_keys_iterator:', prefix);
+      onStoreReady(function(err) {
+        var range;
+        if (err) { return done(err); }
+        console.log('idb_all_keys_iteratorprefix:', prefix);
+        // var keyRange = IDBKeyRange.lowerBound(0);
+        var cursorRequest = db.transaction([prefix], consts.READ).objectStore(prefix).openCursor();
+        cursorRequest.onsuccess = function(event) {
+          var result = event.target.result
+            , val;
+          if (!! result === false) {
+            return done();
+          }
+          
+          val = result.value;
+          cb(val._id || val.id, val, function() {
+            result.continue();
+          });
+        }
+        cursorRequest.onerror = done;
+      });
+    }
+
+
+    function idb_all_keys(prefix, cb) {
+      var keys = [];
+      idb_all_keys_iterator(prefix, function(key, value, done) {
+        keys.push(key);
+        done();
+      }, function(err) {
+        if (err) { return cb(err); }
+        cb(null, keys);
+      });
+    }
+
+    return { get     : idb_get
+           , put     : idb_put
+           , destroy : idb_destroy
+           , all_keys_iterator: idb_all_keys_iterator
+           , all_keys: idb_all_keys
+           , stratName: 'idbstore'
+           , ready: onStoreReady
+           , internalName: dbName
+           };
+  }());
   
-  
-  function idb_all_keys(prefix) {
-    var keys = [];
-    browser_all_keys_iterator(prefix, function(key, value, done) {
-      keys.push(key);
-      done();
-    });
-    return keys;
-  }
-  
-  return { get     : idb_get
-         , put     : idb_put
-         , destroy : idb_destroy
-         , all_keys_iterator: idb_all_keys_iterator
-         , all_keys: idb_all_keys
-         , stratName: 'idbstore'
-         };
+  stores[base_url] = store;
+  return store;
 }function store_strategy_webstore(base_url, store, strat_name) {
 
   function full_path(prefix, id) {
@@ -1211,6 +1353,10 @@ function create_storage(engineConstructor) {
       done(null, keys);
     });
   }
+  
+  function ready(cb) {
+    cb();
+  }
 
   if(! store) { throw new Error('At the moment this only works in modern browsers'); }
 
@@ -1220,6 +1366,7 @@ function create_storage(engineConstructor) {
          , all_keys_iterator: browser_all_keys_iterator
          , all_keys: browser_all_keys
          , stratName: strat_name
+         , ready: ready
          };
 }function store_strategy_localstore(base_url) {
   return store_strategy_webstore(base_url, root.localStorage, 'localstore');
@@ -1302,12 +1449,17 @@ function store_strategy_memstore(base_url) {
     });
     cb(null, keys);
   }
+  
+  function ready(cb) {
+    cb();
+  }
 
   return { get     : mem_get
          , put     : mem_put
          , destroy : mem_destroy
          , all_keys_iterator: mem_all_keys_iterator
          , all_keys: mem_all_keys
+         , ready: ready
          , stratName: 'memstore'
          };
 }function resolve_storage_strategy(strat_name) {
@@ -1484,7 +1636,7 @@ options = options || {};
 
 // ====  strategy resolving ~======
 
-options.storage_strategy || (options.storage_strategy = 'localstore');
+options.storage_strategy || (options.storage_strategy = 'idbstore');
 store = resolve_storage_strategy(options.storage_strategy) (base_url);
 
 options.pull_strategy || (options.pull_strategy = 'couchdb_bulk');
@@ -1494,6 +1646,12 @@ options.push_strategy || (options.push_strategy = 'restful_ajax');
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 // ============================= DB manipulation  ~===
+
+function meta_op(op, version) {
+  var ret = {o:op};
+  version && (ret[v] = version);
+  return ret;
+}
 
 function unsynced_keys(cb) {
   return store.meta.all_keys(cb);
@@ -1523,12 +1681,17 @@ function put(key, value, callback) {
     }
   }
   
-  if (! value.id || value._id) { value._id = key; }
-  store.doc.put(key, value, function(err) {
+  if ('object' !== typeof(value)) { return callback(new Error("You can only put objects, not " + typeof(value))); }
+  
+  value.id || value._id || (value._id = key);
+  store.ready(function(err) {
     if (err) { return callback(err); }
-    store.meta.put(key, 'p', function(err) {
+    store.doc.put(key, value, function(err) {
       if (err) { return callback(err); }
-      callback(null, key);
+      store.meta.put(key, meta_op('p'), function(err) {
+        if (err) { return callback(err); }
+        callback(null, key);
+      });
     });
   });
   return key;
@@ -1536,32 +1699,42 @@ function put(key, value, callback) {
 
 function remote_put(key, value, cb) {
   if (! cb) { cb = error_callback; }
-  return store.doc.put(key, value, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    store.doc.put(key, value, cb);
+  });
 }
 
 function get(key, cb) {
   if (! cb) { cb = error_callback; }
-  return store.doc.get(key, cb);
+  store.ready(function(err) {
+    if (err) { return callback(err); }
+    return store.doc.get(key, cb);
+  });
 }
 
 function destroy(key, cb) {
-  var meta_value = 'd';
   get(key, function(err, old) {
     if (err) { return cb(err); }
-    if (old && old._rev) { meta_value += old._rev; }
-    store.doc.destroy(key, function(err, destroyed) {
+    store.ready(function(err) {
       if (err) { return cb(err); }
-      if (destroyed) {
-        store.meta.put(key, meta_value, cb);
-      } else {
-        cb();
-      }
+      store.doc.destroy(key, function(err, destroyed) {
+        if (err) { return cb(err); }
+        if (destroyed) {
+          store.meta.put(key, meta_op('d', old && old._rev), cb);
+        } else {
+          cb();
+        }
+      });
     });
   });
 }
 
 function remote_destroy(key, cb) {
-  store.doc.destroy(key, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    store.doc.destroy(key, cb);
+  });
 }
 
 function all(callback) {
@@ -1581,49 +1754,59 @@ function all(callback) {
 }
 
 function nuke(cb) {
-  (function(done) {
-    store.doc.all_keys(function(err, keys) {
-      if (err) { return cb(err); }
-      var key, i = -1;
-      (function next() {
-        i += 1;
-        if (i >= keys.length) {
-         return done(); 
-        }
-        key = keys[i];
-        store.doc.destroy(key, function(err) {
-          if (err) { return cb(err); }
-          next();
-        });
-      }());
-    });
-  }(function() {
-    store.meta.all_keys(function(err, keys) {
-      if (err) { return cb(err); }
-      var key, i = -1;
-      (function next() {
-        i += 1;
-        if (i >= keys.length) {
-         return cb(); 
-        }
-        key = keys[i];
-        store.meta.destroy(key, function(err) {
-          if (err) { return cb(err); }
-          next();
-        });
-      }());
-    });
-  }));
+  if (! cb) { cb = error_callback; }
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    (function(done) {
+      store.doc.all_keys(function(err, keys) {
+        if (err) { return cb(err); }
+        var key, i = -1;
+        (function next() {
+          i += 1;
+          if (i >= keys.length) {
+           return done(); 
+          }
+          key = keys[i];
+          store.doc.destroy(key, function(err) {
+            if (err) { return cb(err); }
+            next();
+          });
+        }());
+      });
+    } (function() {
+      store.meta.all_keys(function(err, keys) {
+        if (err) { return cb(err); }
+        var key, i = -1;
+        (function next() {
+          i += 1;
+          if (i >= keys.length) {
+           return cb(); 
+          }
+          key = keys[i];
+          store.meta.destroy(key, function(err) {
+            if (err) { return cb(err); }
+            next();
+          });
+        }());
+      });
+    }));
+  });
 }
 
 // ======================= sync   ~==
 
 function pull(resolveConflicts, cb) {
-  pull_strategy(resolveConflicts, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    pull_strategy(resolveConflicts, cb);
+  });
 }
 
 function push(resolveConflicts, cb) {
-  push_strategy(resolveConflicts, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    push_strategy(resolveConflicts, cb);
+  });
 }
 
 sync = (function() {
@@ -1666,6 +1849,7 @@ sync = (function() {
 }());
 
 that.storageStrategy = store.stratName;
+that.internalNAme    = store.internalName;
 that.sync          = sync;
 that.put           = put;
 that.get           = get;

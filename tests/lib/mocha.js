@@ -114,6 +114,42 @@ exports.getWindowSize = function(){
 };
 }); // module: browser/tty.js
 
+require.register("hook.js", function(module, exports, require){
+
+/**
+ * Module dependencies.
+ */
+
+var Runnable = require('./runnable');
+
+/**
+ * Expose `Hook`.
+ */
+
+module.exports = Hook;
+
+/**
+ * Initialize a new `Hook` with the given `title` and callback `fn`.
+ *
+ * @param {String} title
+ * @param {Function} fn
+ * @api private
+ */
+
+function Hook(title, fn) {
+  Runnable.call(this, title, fn);
+}
+
+/**
+ * Inherit from `Runnable.prototype`.
+ */
+
+Hook.prototype = new Runnable;
+Hook.prototype.constructor = Hook;
+
+
+}); // module: hook.js
+
 require.register("interfaces/bdd.js", function(module, exports, require){
 
 /**
@@ -285,9 +321,13 @@ var Suite = require('../suite')
 
 /**
  * TDD-style interface:
- * 
+ *
  *      suite('Array', function(){
  *        suite('#indexOf()', function(){
+ *          suiteSetup(function(){
+ *
+ *          });
+ *          
  *          test('should return -1 when not present', function(){
  *
  *          });
@@ -295,9 +335,13 @@ var Suite = require('../suite')
  *          test('should return the index when present', function(){
  *
  *          });
+ *
+ *          suiteTeardown(function(){
+ *
+ *          });
  *        });
  *      });
- * 
+ *
  */
 
 module.exports = function(suite){
@@ -314,7 +358,7 @@ module.exports = function(suite){
     };
 
     /**
-     * Execute before each test case.
+     * Execute after each test case.
      */
 
     context.teardown = function(fn){
@@ -322,11 +366,27 @@ module.exports = function(suite){
     };
 
     /**
+     * Execute before the suite.
+     */
+
+    context.suiteSetup = function(fn){
+      suites[0].beforeAll(fn);
+    };
+
+    /**
+     * Execute after the suite.
+     */
+
+    context.suiteTeardown = function(fn){
+      suites[0].afterAll(fn);
+    };
+
+    /**
      * Describe a "suite" with the given `title`
      * and callback `fn` containing nested suites
      * and/or tests.
      */
-    
+
     context.suite = function(title, fn){
       var suite = Suite.create(suites[0], title);
       suites.unshift(suite);
@@ -360,12 +420,14 @@ require.register("mocha.js", function(module, exports, require){
  * Library version.
  */
 
-exports.version = '0.0.5';
+exports.version = '0.2.0';
 
 exports.interfaces = require('./interfaces');
 exports.reporters = require('./reporters');
+exports.Runnable = require('./runnable');
 exports.Runner = require('./runner');
 exports.Suite = require('./suite');
+exports.Hook = require('./hook');
 exports.Test = require('./test');
 }); // module: mocha.js
 
@@ -486,12 +548,13 @@ exports.list = function(failures){
       + color('error stack', '\n%s\n');
 
     // msg
-    var stack = test.err.stack
-      , index = stack.indexOf('at')
+    var err = test.err
+      , stack = err.stack
+      , index = stack.indexOf(err.message) + err.message.length
       , msg = stack.slice(0, index);
 
     // indent stack trace without msg
-    stack = stack.slice(index)
+    stack = stack.slice(index + 1)
       .replace(/^/gm, '  ');
 
     console.error(fmt, i, test.fullTitle(), msg, stack);
@@ -516,6 +579,7 @@ function Base(runner) {
     , failures = this.failures = [];
 
   if (!runner) return;
+  this.runner = runner;
 
   runner.on('start', function(){
     stats.start = new Date;
@@ -576,7 +640,7 @@ Base.prototype.epilogue = function(){
       + color('fail', ' %d of %d tests failed')
       + color('light', ':')
 
-    console.error(fmt, stats.failures, stats.tests);
+    console.error(fmt, stats.failures, this.runner.total);
     Base.list(this.failures);
     console.error();
     process.nextTick(function(){
@@ -1338,7 +1402,7 @@ function Spec(runner) {
   });
 
   runner.on('test', function(test){
-    process.stdout.write(indent() + color('pass', test.title + ': '));
+    process.stdout.write(indent() + color('pass', '  ◦ ' + test.title + ': '));
   });
 
   runner.on('pending', function(test){
@@ -1431,6 +1495,130 @@ function TAP(runner) {
 }
 }); // module: reporters/tap.js
 
+require.register("runnable.js", function(module, exports, require){
+
+/**
+ * Module dependencies.
+ */
+
+var EventEmitter = require('browser/events').EventEmitter;
+
+/**
+ * Expose `Runnable`.
+ */
+
+module.exports = Runnable;
+
+/**
+ * Initialize a new `Runnable` with the given `title` and callback `fn`.
+ *
+ * @param {String} title
+ * @param {Function} fn
+ * @api private
+ */
+
+function Runnable(title, fn) {
+  this.title = title;
+  this.fn = fn;
+  this.async = fn && fn.length;
+  this.sync = ! this.async;
+  this.timeout(2000);
+}
+
+/**
+ * Inherit from `EventEmitter.prototype`.
+ */
+
+Runnable.prototype = new EventEmitter;
+Runnable.prototype.constructor = Runnable;
+
+
+/**
+ * Set & get timeout `ms`.
+ *
+ * @param {Number} ms
+ * @return {Runnable|Number} ms or self
+ * @api private
+ */
+
+Runnable.prototype.timeout = function(ms){
+  if (0 == arguments.length) return this._timeout;
+  this._timeout = ms;
+  return this;
+};
+
+/**
+ * Return the full title generated by recursively
+ * concatenating the parent's full title.
+ *
+ * @return {String}
+ * @api public
+ */
+
+Runnable.prototype.fullTitle = function(){
+  return this.parent.fullTitle() + ' ' + this.title;
+};
+
+/**
+ * Run the test and invoke `fn(err)`.
+ *
+ * @param {Function} fn
+ * @api private
+ */
+
+Runnable.prototype.run = function(fn){
+  var self = this
+    , ms = this.timeout()
+    , start = new Date
+    , finished
+    , emitted
+    , timer;
+
+  // timeout
+  if (this.async) {
+    timer = setTimeout(function(){
+      done(new Error('timeout of ' + ms + 'ms exceeded'));
+    }, ms);
+  }
+
+  // called multiple times
+  function multiple() {
+    if (emitted) return;
+    emitted = true;
+    self.emit('error', new Error('done() called multiple times'));
+  }
+
+  // finished
+  function done(err) {
+    if (finished) return multiple();
+    clearTimeout(timer);
+    self.duration = new Date - start;
+    finished = true;
+    fn(err);
+  }
+
+  // async
+  if (this.async) {
+    try {
+      this.fn(done);
+    } catch (err) {
+      done(err);
+    }
+    return;
+  }
+  
+  // sync
+  try {
+    if (!this.pending) this.fn();
+    this.duration = new Date - start;
+    fn();
+  } catch (err) {
+    fn(err);
+  }
+};
+
+}); // module: runnable.js
+
 require.register("runner.js", function(module, exports, require){
 
 /**
@@ -1458,6 +1646,8 @@ module.exports = Runner;
  *   - `suite end`  (suite) all tests (and sub-suites) have finished
  *   - `test`  (test) test execution started
  *   - `test end`  (test) test completed
+ *   - `hook`  (hook) hook execution started
+ *   - `hook end`  (hook) hook complete
  *   - `pass`  (test) test passed
  *   - `fail`  (test, err) test failed
  *
@@ -1466,11 +1656,13 @@ module.exports = Runner;
 
 function Runner(suite) {
   var self = this;
+  this._globals = [];
   this.suite = suite;
   this.total = suite.total();
-  this.globals = Object.keys(global).concat(['errno']);
   this.on('test end', function(test){ self.checkGlobals(test); });
+  this.on('hook end', function(hook){ self.checkGlobals(hook); });
   this.grep(/.*/);
+  this.globals(Object.keys(global).concat(['errno']));
 }
 
 /**
@@ -1495,6 +1687,21 @@ Runner.prototype.grep = function(re){
 };
 
 /**
+ * Allow the given `arr` of globals.
+ *
+ * @param {Array} arr
+ * @return {Runner} for chaining
+ * @api public
+ */
+
+Runner.prototype.globals = function(arr){
+  arr.forEach(function(arr){
+    this._globals.push(arr);
+  }, this);
+  return this;
+};
+
+/**
  * Check for global variable leaks.
  *
  * @api private
@@ -1502,10 +1709,10 @@ Runner.prototype.grep = function(re){
 
 Runner.prototype.checkGlobals = function(test){
   var leaks = Object.keys(global).filter(function(key){
-    return !~this.globals.indexOf(key);
+    return !~this._globals.indexOf(key);
   }, this);
 
-  this.globals = this.globals.concat(leaks);
+  this._globals = this._globals.concat(leaks);
 
   if (leaks.length > 1) {
     this.fail(test, new Error('global leaks detected: ' + leaks.join(', ') + ''));
@@ -1528,23 +1735,26 @@ Runner.prototype.fail = function(test, err){
 };
 
 /**
- * Fail the given `hook` name.
+ * Fail the given `hook` with `err`.
  *
- * @param {String} hook
+ * Hook failures (currently) hard-exit due
+ * to that fact that a failing hook will
+ * surely cause subsequent tests to fail,
+ * causing jumbled reporting.
+ *
+ * @param {Hook} hook
  * @param {Error} err
  * @api private
  */
 
 Runner.prototype.failHook = function(hook, err){
-  var test = new Test(hook + ' hook', noop);
-  test.parent = this.suite;
-  this.fail(test, err);
+  this.fail(hook, err);
   this.emit('end');
   process.exit(0);
 };
 
 /**
- * Run hook `name` callbacks and then invoke `fn(err)`.
+ * Run hook `name` callbacks and then invoke `fn()`.
  *
  * @param {String} name
  * @param {Function} function
@@ -1553,43 +1763,26 @@ Runner.prototype.failHook = function(hook, err){
 
 Runner.prototype.hook = function(name, fn){
   var suite = this.suite
-    , callbacks = suite[name + 'Callbacks']
+    , hooks = suite['_' + name]
     , ms = suite._timeout
+    , self = this
     , timer;
 
   function next(i) {
-    var callback = callbacks[i];
-    if (!callback) return fn();
+    var hook = hooks[i];
+    if (!hook) return fn();
 
-    // async
-    if (1 == callback.length) {
-      // timeout
-      timer = setTimeout(function(){
-        fn(new Error('timeout of ' + ms + 'ms exceeded'));
-      }, ms);
+    self.emit('hook', hook);
 
-      // async
-      try {
-        callback(function(err){
-          clearTimeout(timer);
-          if (err) return fn(err);
-          next(++i);
-        });
-      } catch (err) {
-        fn(err);
-      }
-      return;
-    }
+    hook.on('error', function(err){
+      self.failHook(hook, err);
+    });
 
-    // serial
-    try {
-      callback();
-      process.nextTick(function(){
-        next(++i);
-      });
-    } catch (err) {
-      fn(err);
-    }
+    hook.run(function(err){
+      if (err) return self.failHook(hook, err);
+      self.emit('hook end', hook);
+      next(++i);
+    });
   }
 
   process.nextTick(function(){
@@ -1684,32 +1877,14 @@ Runner.prototype.runTest = function(fn){
   var test = this.test
     , self = this;
 
-  // async
-  if (test.async) {
-    try {
-      test.run(function(err){
-        if (test.finished) {
-          self.fail(test, new Error('done() called multiple times'));
-          return;
-        }
-        fn(err);
-      });
-    } catch (err) {
-      fn(err);
-    }
-
-    return;
+  try {
+    test.on('error', function(err){
+      self.fail(test, err);
+    });
+    test.run(fn);
+  } catch (err) {
+    fn(err);
   }
-
-  // sync  
-  process.nextTick(function(){
-    try {
-      test.run();
-      fn();
-    } catch (err) {
-      fn(err);
-    }
-  });
 };
 
 /**
@@ -1751,18 +1926,13 @@ Runner.prototype.runTests = function(suite, fn){
 
     // execute test and hook(s)
     self.emit('test', self.test = test);
-    self.hookDown('beforeEach', function(err){
-      if (err) return self.failHook('beforeEach', err);
+    self.hookDown('beforeEach', function(){
       self.runTest(function(err){
         if (err) return next(err);
         self.emit('pass', test);
         test.passed = true;
         self.emit('test end', test);
-        if (err) return self.failHook('beforeEach', err);
-        self.hookUp('afterEach', function(err){
-          if (err) return self.failHook('afterEach', err);
-          next();
-        });
+        self.hookUp('afterEach', next);
       });
     });
   }
@@ -1793,15 +1963,13 @@ Runner.prototype.runSuite = function(suite, fn){
 
   function done() {
     self.suite = suite;
-    self.hook('afterAll', function(err){
-      if (err) return self.failHook('afterAll', err);
+    self.hook('afterAll', function(){
       self.emit('suite end', suite);
       fn();
     });
   }
 
-  this.hook('beforeAll', function(err){
-    if (err) return self.failHook('beforeAll', err);
+  this.hook('beforeAll', function(){
     self.runTests(suite, next);
   });
 };
@@ -1839,7 +2007,8 @@ require.register("suite.js", function(module, exports, require){
  * Module dependencies.
  */
 
-var EventEmitter = require('browser/events').EventEmitter;
+var EventEmitter = require('browser/events').EventEmitter
+  , Hook = require('./hook');
 
 /**
  * Expose `Suite`.
@@ -1886,10 +2055,10 @@ function Suite(title) {
   this.title = title;
   this.suites = [];
   this.tests = [];
-  this.beforeAllCallbacks = [];
-  this.beforeEachCallbacks = [];
-  this.afterAllCallbacks = [];
-  this.afterEachCallbacks = [];
+  this._beforeEach = [];
+  this._beforeAll = [];
+  this._afterEach = [];
+  this._afterAll = [];
   this.root = !title;
   this.timeout(2000);
 }
@@ -1925,8 +2094,10 @@ Suite.prototype.timeout = function(ms){
  */
 
 Suite.prototype.beforeAll = function(fn){
-  this.beforeAllCallbacks.push(fn);
-  this.emit('beforeAll', fn);
+  var hook = new Hook('"before all" hook', fn);
+  hook.parent = this;
+  this._beforeAll.push(hook);
+  this.emit('beforeAll', hook);
   return this;
 };
 
@@ -1939,8 +2110,10 @@ Suite.prototype.beforeAll = function(fn){
  */
 
 Suite.prototype.afterAll = function(fn){
-  this.afterAllCallbacks.push(fn);
-  this.emit('afterAll', fn);
+  var hook = new Hook('"after all" hook', fn);
+  hook.parent = this;
+  this._afterAll.push(hook);
+  this.emit('afterAll', hook);
   return this;
 };
 
@@ -1953,8 +2126,10 @@ Suite.prototype.afterAll = function(fn){
  */
 
 Suite.prototype.beforeEach = function(fn){
-  this.beforeEachCallbacks.push(fn);
-  this.emit('beforeEach', fn);
+  var hook = new Hook('"before each" hook', fn);
+  hook.parent = this;
+  this._beforeEach.push(hook);
+  this.emit('beforeEach', hook);
   return this;
 };
 
@@ -1967,8 +2142,10 @@ Suite.prototype.beforeEach = function(fn){
  */
 
 Suite.prototype.afterEach = function(fn){
-  this.afterEachCallbacks.push(fn);
-  this.emit('afterEach', fn);
+  var hook = new Hook('"after each" hook', fn);
+  hook.parent = this;
+  this._afterEach.push(hook);
+  this.emit('afterEach', hook);
   return this;
 };
 
@@ -2038,6 +2215,12 @@ Suite.prototype.total = function(){
 require.register("test.js", function(module, exports, require){
 
 /**
+ * Module dependencies.
+ */
+
+var Runnable = require('./runnable');
+
+/**
  * Expose `Test`.
  */
 
@@ -2052,73 +2235,17 @@ module.exports = Test;
  */
 
 function Test(title, fn) {
-  this.title = title;
-  this.fn = fn;
+  Runnable.call(this, title, fn);
   this.pending = !fn;
-  this.async = fn && fn.length;
-  this.sync = ! this.async;
-  this.timeout(2000);
 }
 
 /**
- * Set timeout `ms`.
- *
- * @param {Number} ms
- * @return {Test} for chaining
- * @api private
+ * Inherit from `Runnable.prototype`.
  */
 
-Test.prototype.timeout = function(ms){
-  this._timeout = ms;
-  return this;
-};
+Test.prototype = new Runnable;
+Test.prototype.constructor = Test;
 
-/**
- * Return the full title generated by recursively
- * concatenating the parent's full title.
- *
- * @return {String}
- * @api public
- */
-
-Test.prototype.fullTitle = function(){
-  return this.parent.fullTitle() + ' ' + this.title;
-};
-
-/**
- * Run the test and invoke `fn(err)`.
- *
- * @param {Function} fn
- * @api private
- */
-
-Test.prototype.run = function(fn){
-  var timer
-    , self = this
-    , ms = this._timeout
-    , start = new Date;
-
-  // timeout
-  if (this.async) {
-    timer = setTimeout(function(){
-      fn(new Error('timeout of ' + ms + 'ms exceeded'));
-    }, ms);
-  }
-
-  // async
-  if (this.async) {
-    this.fn(function(err){
-      clearTimeout(timer);
-      self.duration = new Date - start;
-      fn(err);
-      self.finished = true;
-    });
-  // sync
-  } else {
-    if (!this.pending) this.fn();
-    this.duration = new Date - start;
-  }
-};
 
 }); // module: test.js
 
@@ -2143,7 +2270,7 @@ exports.escape = function(html) {
 
 /**
  * Node shims.
- * 
+ *
  * These are meant only to allow
  * mocha.js to run untouched, not
  * to allow running node code in
@@ -2160,10 +2287,22 @@ global = this;
 mocha = require('mocha');
 
 // boot
-
 ;(function(){
   var suite = new mocha.Suite;
   var Reporter = mocha.reporters.HTML;
+  function parse(qs) {
+    return qs
+      .replace('?', '')
+      .split('&')
+      .reduce(function(obj, pair){
+        var i = pair.indexOf('=')
+          , key = pair.slice(0, i)
+          , val = pair.slice(++i);
+
+        obj[key] = decodeURIComponent(val);
+        return obj;
+      }, {});
+  }
 
   mocha.setup = function(ui){
     ui = mocha.interfaces[ui];
@@ -2176,6 +2315,8 @@ mocha = require('mocha');
     suite.emit('run');
     var runner = new mocha.Runner(suite);
     var reporter = new Reporter(runner);
+    var params = parse(window.location.search || "");
+    if (pattern = params['grep']) runner.grep(new RegExp(pattern));
     runner.run();
   };
 })();

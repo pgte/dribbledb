@@ -9,7 +9,7 @@ options = options || {};
 
 // ====  strategy resolving ~======
 
-options.storage_strategy || (options.storage_strategy = 'localstore');
+options.storage_strategy || (options.storage_strategy = 'idbstore');
 store = resolve_storage_strategy(options.storage_strategy) (base_url);
 
 options.pull_strategy || (options.pull_strategy = 'couchdb_bulk');
@@ -19,6 +19,12 @@ options.push_strategy || (options.push_strategy = 'restful_ajax');
 push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 // ============================= DB manipulation  ~===
+
+function meta_op(op, version) {
+  var ret = {o:op};
+  version && (ret[v] = version);
+  return ret;
+}
 
 function unsynced_keys(cb) {
   return store.meta.all_keys(cb);
@@ -48,12 +54,17 @@ function put(key, value, callback) {
     }
   }
   
-  if (! value.id || value._id) { value._id = key; }
-  store.doc.put(key, value, function(err) {
+  if ('object' !== typeof(value)) { return callback(new Error("You can only put objects, not " + typeof(value))); }
+  
+  value.id || value._id || (value._id = key);
+  store.ready(function(err) {
     if (err) { return callback(err); }
-    store.meta.put(key, 'p', function(err) {
+    store.doc.put(key, value, function(err) {
       if (err) { return callback(err); }
-      callback(null, key);
+      store.meta.put(key, meta_op('p'), function(err) {
+        if (err) { return callback(err); }
+        callback(null, key);
+      });
     });
   });
   return key;
@@ -61,32 +72,42 @@ function put(key, value, callback) {
 
 function remote_put(key, value, cb) {
   if (! cb) { cb = error_callback; }
-  return store.doc.put(key, value, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    store.doc.put(key, value, cb);
+  });
 }
 
 function get(key, cb) {
   if (! cb) { cb = error_callback; }
-  return store.doc.get(key, cb);
+  store.ready(function(err) {
+    if (err) { return callback(err); }
+    return store.doc.get(key, cb);
+  });
 }
 
 function destroy(key, cb) {
-  var meta_value = 'd';
   get(key, function(err, old) {
     if (err) { return cb(err); }
-    if (old && old._rev) { meta_value += old._rev; }
-    store.doc.destroy(key, function(err, destroyed) {
+    store.ready(function(err) {
       if (err) { return cb(err); }
-      if (destroyed) {
-        store.meta.put(key, meta_value, cb);
-      } else {
-        cb();
-      }
+      store.doc.destroy(key, function(err, destroyed) {
+        if (err) { return cb(err); }
+        if (destroyed) {
+          store.meta.put(key, meta_op('d', old && old._rev), cb);
+        } else {
+          cb();
+        }
+      });
     });
   });
 }
 
 function remote_destroy(key, cb) {
-  store.doc.destroy(key, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    store.doc.destroy(key, cb);
+  });
 }
 
 function all(callback) {
@@ -106,49 +127,59 @@ function all(callback) {
 }
 
 function nuke(cb) {
-  (function(done) {
-    store.doc.all_keys(function(err, keys) {
-      if (err) { return cb(err); }
-      var key, i = -1;
-      (function next() {
-        i += 1;
-        if (i >= keys.length) {
-         return done(); 
-        }
-        key = keys[i];
-        store.doc.destroy(key, function(err) {
-          if (err) { return cb(err); }
-          next();
-        });
-      }());
-    });
-  }(function() {
-    store.meta.all_keys(function(err, keys) {
-      if (err) { return cb(err); }
-      var key, i = -1;
-      (function next() {
-        i += 1;
-        if (i >= keys.length) {
-         return cb(); 
-        }
-        key = keys[i];
-        store.meta.destroy(key, function(err) {
-          if (err) { return cb(err); }
-          next();
-        });
-      }());
-    });
-  }));
+  if (! cb) { cb = error_callback; }
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    (function(done) {
+      store.doc.all_keys(function(err, keys) {
+        if (err) { return cb(err); }
+        var key, i = -1;
+        (function next() {
+          i += 1;
+          if (i >= keys.length) {
+           return done(); 
+          }
+          key = keys[i];
+          store.doc.destroy(key, function(err) {
+            if (err) { return cb(err); }
+            next();
+          });
+        }());
+      });
+    } (function() {
+      store.meta.all_keys(function(err, keys) {
+        if (err) { return cb(err); }
+        var key, i = -1;
+        (function next() {
+          i += 1;
+          if (i >= keys.length) {
+           return cb(); 
+          }
+          key = keys[i];
+          store.meta.destroy(key, function(err) {
+            if (err) { return cb(err); }
+            next();
+          });
+        }());
+      });
+    }));
+  });
 }
 
 // ======================= sync   ~==
 
 function pull(resolveConflicts, cb) {
-  pull_strategy(resolveConflicts, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    pull_strategy(resolveConflicts, cb);
+  });
 }
 
 function push(resolveConflicts, cb) {
-  push_strategy(resolveConflicts, cb);
+  store.ready(function(err) {
+    if (err) { return cb(err); }
+    push_strategy(resolveConflicts, cb);
+  });
 }
 
 sync = (function() {
@@ -191,6 +222,7 @@ sync = (function() {
 }());
 
 that.storageStrategy = store.stratName;
+that.internalNAme    = store.internalName;
 that.sync          = sync;
 that.put           = put;
 that.get           = get;
