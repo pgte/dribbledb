@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sat Dec 3 16:13:15 2011 +0000
+ * BUILD DATE: Sat Dec 3 21:23:28 2011 +0000
  */
 
  (function() {
@@ -1046,7 +1046,7 @@ function create_storage(engineConstructor) {
           cb(null, val || 0);
         });
       } else {
-        return engine.put(SINCE_PREFIX, last, val, cb);
+        return engine.put(SINCE_PREFIX, 'last', val, cb);
       }
     }
 
@@ -1078,12 +1078,15 @@ function store_strategy_idbstore(base_url) {
   if (stores[base_url]) { return stores[base_url]; }
 
   var store = (function() {
+
     var DB_VERSION = '1.2';
+
     var idb = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
     var consts = window.IDBTransaction || window.webkitIDBTransaction || window.msIndexedDB;
     var IDBDatabaseException = window.IDBDatabaseException || window.webkitIDBDatabaseException;
     var errorCodes = Object.keys(IDBDatabaseException);
     var IDBKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange;
+    var IDBCursor = window.IDBCursor || window.webkitIDBCursor;
 
     var dbName;
     var db;
@@ -1117,7 +1120,6 @@ function store_strategy_idbstore(base_url) {
         
         versionReq.onerror = versionReq.onblocked = proxyErrorEvent(cb);
         versionReq.onsuccess = function(event) {
-          console.log('222');
           cb();
         }
       } else {
@@ -1178,10 +1180,9 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_get(prefix, id, cb) {
+      if ('undefined' == typeof(id)) { console.log('ERRRORRORORO', new Error('caneco').stack); }
       onStoreReady(function(err) {
         if (err) { return cb(err); }
-        console.log('idb_get', id);
-        if ('string' !== typeof(id)) { console.log('BBBBBBBBBBBB -> id must be string', new Error('CANERCO').stack); }
         var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
         getRequest.onsuccess = function(event) {
           setTimeout(function() {
@@ -1196,10 +1197,8 @@ function store_strategy_idbstore(base_url) {
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         value._id || (value._id = id);
-        console.log('putting', value, typeof(value));
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).put(value);
         putRequest.onsuccess = function(event){
-          console.log('success');
           cb(null, event.target.result);
         };
         putRequest.onerror = proxyErrorEvent(cb);
@@ -1227,18 +1226,18 @@ function store_strategy_idbstore(base_url) {
         var range;
         if (err) { return done(err); }
         // var keyRange = IDBKeyRange.lowerBound(0);
-        var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor();
+        var cursorRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).openCursor(undefined, IDBCursor.NEXT);
         cursorRequest.onsuccess = function(event) {
           var result = event.target.result
             , val;
-          if (!! result === false) {
-            return done();
-          }
+
+          if (!! result === false) { return done(); }
           
           val = result.value;
           cb(val._id || val.id, val, function() {
-            console.log('continuing...');
-            result.continue();
+            try {
+              result.continue('next');
+            } catch(err) { console.log('continue yielded an error', err.message, err.stack); return done(err); }
           });
         }
         cursorRequest.onerror = done;
@@ -1594,8 +1593,6 @@ function store_strategy_memstore(base_url) {
             if (err) { return cb(err); }
 
             // ======= conflict! ~==
-            console.log('RRREEESSS', res);
-
             if (res.conflict) {
               remote_get(uri, function(err, resp) {
                 if (err) { return cb(err); }
@@ -1710,7 +1707,6 @@ function remote_put(key, value, cb) {
 
 function get(key, cb) {
   if (! cb) { cb = error_callback; }
-  if ('string' !== typeof(key)) { console.log('BBBBBBBBBBBBB-> id must be string', new Error('caneco')); }
   store.ready(function(err) {
     if (err) { return callback(err); }
     return store.doc.get(key, cb);
@@ -1765,7 +1761,6 @@ function nuke(cb) {
     (function(done) {
       store.doc.all_keys(function(err, keys) {
         if (err) { return cb(err); }
-        console.log('nuking keys', keys);
         var key, i = -1;
         (function next() {
           i += 1;
@@ -1774,8 +1769,7 @@ function nuke(cb) {
           }
           key = keys[i];
           store.doc.destroy(key, function(err) {
-            console.log(err);
-            if (err) { console.log('error while nuking keys', keys); return cb(err); }
+            if (err) { return cb(err); }
             next();
           });
         }());

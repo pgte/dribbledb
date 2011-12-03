@@ -5,12 +5,15 @@ function store_strategy_idbstore(base_url) {
   if (stores[base_url]) { return stores[base_url]; }
 
   var store = (function() {
+
     var DB_VERSION = '1.2';
+
     var idb = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
     var consts = window.IDBTransaction || window.webkitIDBTransaction || window.msIndexedDB;
     var IDBDatabaseException = window.IDBDatabaseException || window.webkitIDBDatabaseException;
     var errorCodes = Object.keys(IDBDatabaseException);
     var IDBKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange;
+    var IDBCursor = window.IDBCursor || window.webkitIDBCursor;
 
     var dbName;
     var db;
@@ -104,6 +107,7 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_get(prefix, id, cb) {
+      if ('undefined' == typeof(id)) { console.log('ERRRORRORORO', new Error('caneco').stack); }
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
@@ -149,18 +153,18 @@ function store_strategy_idbstore(base_url) {
         var range;
         if (err) { return done(err); }
         // var keyRange = IDBKeyRange.lowerBound(0);
-        var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor();
+        var cursorRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).openCursor(undefined, IDBCursor.NEXT);
         cursorRequest.onsuccess = function(event) {
           var result = event.target.result
             , val;
-          if (!! result === false) {
-            return done();
-          }
+
+          if (!! result === false) { return done(); }
           
           val = result.value;
           cb(val._id || val.id, val, function() {
-            console.log('continuing...');
-            result.continue();
+            try {
+              result.continue('next');
+            } catch(err) { console.log('continue yielded an error', err.message, err.stack); return done(err); }
           });
         }
         cursorRequest.onerror = done;

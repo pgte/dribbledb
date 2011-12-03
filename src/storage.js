@@ -32,12 +32,12 @@ function create_storage(engineConstructor) {
     function pulled_since(val, cb) {
       if ('function' !== typeof(cb)) { throw new Error('2nd argument must be a function'); }
       if (! val) {
-        engine.get(SINCE_PREFIX, undefined, function(err, val) {
+        engine.get(SINCE_PREFIX, 'last', function(err, val) {
           if (err) { return cb(err); }
           cb(null, val || 0);
         });
       } else {
-        return engine.put(SINCE_PREFIX, undefined, val, cb);
+        return engine.put(SINCE_PREFIX, 'last', val, cb);
       }
     }
 
