@@ -5,8 +5,8 @@ function push_strategy_restful_ajax() {
     
     function push_one(key, value, done) {
       var method
-        , op = value.charAt(0)
-        , rev = value.substr(1)
+        , op = value.o
+        , rev = value.v
         , uri = base_url + '/' + key;
 
       method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
@@ -18,7 +18,6 @@ function push_strategy_restful_ajax() {
             if (err) { return cb(err); }
 
             // ======= conflict! ~==
-
             if (res.conflict) {
               remote_get(uri, function(err, resp) {
                 if (err) { return cb(err); }

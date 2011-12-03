@@ -7,7 +7,6 @@ describe('DribbleDB', function() {
   ;
   
   function openDB(name, type) {
-    console.log('opening db ', name);
     var opts;
     if (type) { opts = {storage_strategy: type}; }
     var db = dbd(name, opts);
@@ -16,17 +15,13 @@ describe('DribbleDB', function() {
       var done = false;
       var pending = [];
       db.ready = function(cb) {
-        console.log('ready');
         if (done) { cb(); }
         else { pending.push(cb); }
       }
       db.nuke(function(err) {
-        console.log('done nuking');
         done = true;
         if (err) { throw err; }
-        console.log('calling back ' + pending.length);
         for (var i = 0; i < pending.length; i ++) {
-          console.log('calling back one');
           pending[i]();
         }
       });
@@ -55,7 +50,7 @@ describe('DribbleDB', function() {
       var i = -1;
       (function next() {
         i += 1;
-        if (i >= idb_dbs.length) { console.log('removed all') ; done(); }
+        if (i >= idb_dbs.length) { return done(); }
         var db = idb_dbs[i];
         idb_removeOne(db, next);
       }());
@@ -71,7 +66,6 @@ describe('DribbleDB', function() {
     var db = openDB('http://foo.com/posts');
     
     it("should exist", function(done) {
-      console.log("-> should exist");
       expect(dbd).toBeDefined();
       done();
     });
@@ -102,9 +96,7 @@ describe('DribbleDB', function() {
     
     it("should be able to put a string and get it back", function(done) {
       db.ready(function() {
-        console.log('ready');
         db.put('a', {a: 'abc'}, function(err, id) {
-          console.log(err);
           expect(err).toBeNull();
           expect(id).toEqual('a');
           db.get('a', function(err, val) {
@@ -383,16 +375,28 @@ describe('DribbleDB', function() {
               db.destroy("b", function(err) {
                 expect(err).toBeNullOrUndefined();
                 db.sync(callback);
-                for(var i = 0; i < 4; i ++) {
-                  expect(requests.length).toEqual(i + 1);
-                  requests[i].respond(201, {}, '{}');
-                }
-                expect(callback.calledWith()).toEqual(true);
-                db.unsynced_keys(function(err, unsyncked_keys) {
-                  expect(err).toBeNullOrUndefined();
-                  expect(unsyncked_keys.length).toEqual(0)
-                  done();
-                });
+                var i = 0;
+                (function respond(done) {
+                  (function schedule() {
+                    if (requests.length > i) {
+                      requests[i].respond(201, {}, '{}');
+                      console.log('responded to ' + i);
+                      i += 1;
+                      if (i >= 4) { done(); }
+                      else { setTimeout(schedule, 100); }
+                    } else {
+                      console.log('postponing...');
+                      setTimeout(schedule, 100);
+                    }
+                  }());
+                }(function() {
+                  expect(callback.calledWith()).toEqual(true);
+                  db.unsynced_keys(function(err, unsyncked_keys) {
+                    expect(err).toBeNullOrUndefined();
+                    expect(unsyncked_keys.length).toEqual(0)
+                    done();
+                  });
+                }));
               });
             });
           });
@@ -425,21 +429,41 @@ describe('DribbleDB', function() {
       db.ready(function() {
         db.put("a", {a:1});
         db.sync(callback);
-
-        expect(callback.callCount).toEqual(0);
-        expect(requests.length).toEqual(1);
-        requests[0].respond(409, {}, '{}');
-        expect(requests.length).toEqual(2);
-        requests[1].respond(200, {'Content-Type': 'application/json'}, '2');
-        expect(callback.called).toEqual(true);
-        expect(callback.callCount).toEqual(1);
-        expect(callback.getCall(0).args.length).toEqual(1);
-        error = callback.getCall(0).args[0]; 
-        expect(error instanceof Error).toEqual(true);
-        expect(error.message).toEqual('Conflict');
-        expect(error.mine).toEqual(1);
-        expect(error.theirs).toEqual(2);
-        done();
+        var responses = {
+            0: [409, {}, '{}']
+          , 1: [200, {'Content-Type': 'application/json'}, '2']
+        };
+        (function respond(done) {
+          var i = 0;
+          (function schedule() {
+            var req;
+            if (requests.length > i) {
+              req = requests[i];
+              req.respond.apply(req, responses[i]);
+              i += 1;
+              if (i >= 4) {
+                done();
+              }
+            } else {
+              setTimeout(schedule, 0);
+            }
+          }());
+        }(function() {
+          expect(callback.callCount).toEqual(0);
+          expect(requests.length).toEqual(1);
+          requests[0].respond();
+          expect(requests.length).toEqual(2);
+          requests[1].respond();
+          expect(callback.called).toEqual(true);
+          expect(callback.callCount).toEqual(1);
+          expect(callback.getCall(0).args.length).toEqual(1);
+          error = callback.getCall(0).args[0]; 
+          expect(error instanceof Error).toEqual(true);
+          expect(error.message).toEqual('Conflict');
+          expect(error.mine).toEqual(1);
+          expect(error.theirs).toEqual(2);
+          done();
+        }));
       });
     });
   });

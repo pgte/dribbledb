@@ -44,7 +44,6 @@ function store_strategy_idbstore(base_url) {
         
         versionReq.onerror = versionReq.onblocked = proxyErrorEvent(cb);
         versionReq.onsuccess = function(event) {
-          console.log('222');
           cb();
         }
       } else {
@@ -121,13 +120,9 @@ function store_strategy_idbstore(base_url) {
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         value._id || (value._id = id);
-        console.log('putting', value, typeof(value));
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).put(value);
         putRequest.onsuccess = function(event){
-          console.log('success');
-          setTimeout(function() {
-            cb(null, event.target.result);
-          }, 0)
+          cb(null, event.target.result);
         };
         putRequest.onerror = proxyErrorEvent(cb);
       });
@@ -138,22 +133,23 @@ function store_strategy_idbstore(base_url) {
         if (err) { return cb(err); }
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).delete(id);
         putRequest.onsuccess = function(event){
-          setTimeout(function() {
-            cb(null, event.target.result);
-          }, 0);
+          cb(null, true);
         };
-        putRequest.onerror = proxyErrorEvent(cb);
+        putRequest.onerror = function(evt) {
+          if (evt.target.errorCode === 3) {
+            cb(null, false);
+          }
+          proxyErrorEvent(cb);
+        }
       });
     }
 
     function idb_all_keys_iterator(prefix, cb, done) {
-      console.log('idb_all_keys_iterator:', prefix);
       onStoreReady(function(err) {
         var range;
         if (err) { return done(err); }
-        console.log('idb_all_keys_iteratorprefix:', prefix);
         // var keyRange = IDBKeyRange.lowerBound(0);
-        var cursorRequest = db.transaction([prefix], consts.READ).objectStore(prefix).openCursor();
+        var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor();
         cursorRequest.onsuccess = function(event) {
           var result = event.target.result
             , val;
@@ -163,6 +159,7 @@ function store_strategy_idbstore(base_url) {
           
           val = result.value;
           cb(val._id || val.id, val, function() {
+            console.log('continuing...');
             result.continue();
           });
         }

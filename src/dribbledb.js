@@ -22,7 +22,7 @@ push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 function meta_op(op, version) {
   var ret = {o:op};
-  version && (ret[v] = version);
+  version && (ret.v = version);
   return ret;
 }
 
@@ -89,6 +89,7 @@ function get(key, cb) {
 function destroy(key, cb) {
   get(key, function(err, old) {
     if (err) { return cb(err); }
+    if (old === null || old === undefined) { return cb(); }
     store.ready(function(err) {
       if (err) { return cb(err); }
       store.doc.destroy(key, function(err, destroyed) {

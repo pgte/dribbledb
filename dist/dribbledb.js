@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Mon Nov 28 12:14:58 2011 +0000
+ * BUILD DATE: Sat Dec 3 16:13:15 2011 +0000
  */
 
  (function() {
@@ -1041,12 +1041,12 @@ function create_storage(engineConstructor) {
     function pulled_since(val, cb) {
       if ('function' !== typeof(cb)) { throw new Error('2nd argument must be a function'); }
       if (! val) {
-        engine.get(SINCE_PREFIX, undefined, function(err, val) {
+        engine.get(SINCE_PREFIX, 'last', function(err, val) {
           if (err) { return cb(err); }
           cb(null, val || 0);
         });
       } else {
-        return engine.put(SINCE_PREFIX, undefined, val, cb);
+        return engine.put(SINCE_PREFIX, last, val, cb);
       }
     }
 
@@ -1180,6 +1180,8 @@ function store_strategy_idbstore(base_url) {
     function idb_get(prefix, id, cb) {
       onStoreReady(function(err) {
         if (err) { return cb(err); }
+        console.log('idb_get', id);
+        if ('string' !== typeof(id)) { console.log('BBBBBBBBBBBB -> id must be string', new Error('CANERCO').stack); }
         var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
         getRequest.onsuccess = function(event) {
           setTimeout(function() {
@@ -1198,9 +1200,7 @@ function store_strategy_idbstore(base_url) {
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).put(value);
         putRequest.onsuccess = function(event){
           console.log('success');
-          setTimeout(function() {
-            cb(null, event.target.result);
-          }, 0)
+          cb(null, event.target.result);
         };
         putRequest.onerror = proxyErrorEvent(cb);
       });
@@ -1211,22 +1211,23 @@ function store_strategy_idbstore(base_url) {
         if (err) { return cb(err); }
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).delete(id);
         putRequest.onsuccess = function(event){
-          setTimeout(function() {
-            cb(null, event.target.result);
-          }, 0);
+          cb(null, true);
         };
-        putRequest.onerror = proxyErrorEvent(cb);
+        putRequest.onerror = function(evt) {
+          if (evt.target.errorCode === 3) {
+            cb(null, false);
+          }
+          proxyErrorEvent(cb);
+        }
       });
     }
 
     function idb_all_keys_iterator(prefix, cb, done) {
-      console.log('idb_all_keys_iterator:', prefix);
       onStoreReady(function(err) {
         var range;
         if (err) { return done(err); }
-        console.log('idb_all_keys_iteratorprefix:', prefix);
         // var keyRange = IDBKeyRange.lowerBound(0);
-        var cursorRequest = db.transaction([prefix], consts.READ).objectStore(prefix).openCursor();
+        var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor();
         cursorRequest.onsuccess = function(event) {
           var result = event.target.result
             , val;
@@ -1236,6 +1237,7 @@ function store_strategy_idbstore(base_url) {
           
           val = result.value;
           cb(val._id || val.id, val, function() {
+            console.log('continuing...');
             result.continue();
           });
         }
@@ -1579,8 +1581,8 @@ function store_strategy_memstore(base_url) {
     
     function push_one(key, value, done) {
       var method
-        , op = value.charAt(0)
-        , rev = value.substr(1)
+        , op = value.o
+        , rev = value.v
         , uri = base_url + '/' + key;
 
       method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
@@ -1592,6 +1594,7 @@ function store_strategy_memstore(base_url) {
             if (err) { return cb(err); }
 
             // ======= conflict! ~==
+            console.log('RRREEESSS', res);
 
             if (res.conflict) {
               remote_get(uri, function(err, resp) {
@@ -1649,7 +1652,7 @@ push_strategy = resolve_push_strategy(options.push_strategy) ();
 
 function meta_op(op, version) {
   var ret = {o:op};
-  version && (ret[v] = version);
+  version && (ret.v = version);
   return ret;
 }
 
@@ -1707,6 +1710,7 @@ function remote_put(key, value, cb) {
 
 function get(key, cb) {
   if (! cb) { cb = error_callback; }
+  if ('string' !== typeof(key)) { console.log('BBBBBBBBBBBBB-> id must be string', new Error('caneco')); }
   store.ready(function(err) {
     if (err) { return callback(err); }
     return store.doc.get(key, cb);
@@ -1716,6 +1720,7 @@ function get(key, cb) {
 function destroy(key, cb) {
   get(key, function(err, old) {
     if (err) { return cb(err); }
+    if (old === null || old === undefined) { return cb(); }
     store.ready(function(err) {
       if (err) { return cb(err); }
       store.doc.destroy(key, function(err, destroyed) {
@@ -1760,6 +1765,7 @@ function nuke(cb) {
     (function(done) {
       store.doc.all_keys(function(err, keys) {
         if (err) { return cb(err); }
+        console.log('nuking keys', keys);
         var key, i = -1;
         (function next() {
           i += 1;
@@ -1768,7 +1774,8 @@ function nuke(cb) {
           }
           key = keys[i];
           store.doc.destroy(key, function(err) {
-            if (err) { return cb(err); }
+            console.log(err);
+            if (err) { console.log('error while nuking keys', keys); return cb(err); }
             next();
           });
         }());
