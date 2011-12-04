@@ -192,7 +192,6 @@ sync = (function() {
     if (arguments.length < 2) { cb = resolveConflicts; resolveConflicts = undefined;}
 
     function callback() {
-      console.log('SYNC: calling back');
       if (! calledback && typeof(cb) === 'function') {
         calledback = true;
         cb.apply(that, arguments);

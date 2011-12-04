@@ -107,8 +107,6 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_get(prefix, id, cb) {
-      console.log('idb_get', prefix, id);
-      if ('undefined' == typeof(id)) { console.log('ERRRORRORORO', new Error('caneco').stack); }
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
@@ -122,7 +120,6 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_put(prefix, id, value, cb) {
-      console.log('idb_put', prefix, id, value);
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         value._id || (value._id = id);
@@ -137,7 +134,6 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_destroy(prefix, id, cb) {
-      console.log('idb_destroy', prefix, id);
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).delete(id);
@@ -157,10 +153,8 @@ function store_strategy_idbstore(base_url) {
 
     function idb_all_keys_iterator(prefix, cb, done) {
       onStoreReady(function(err) {
-        console.log('-> idb_all_keys_iterator', prefix);
         idb_all_keys(prefix, function(err, keys) {
           if (err) { return cb(err); }
-          console.log('idb_all_keys_iterator', 'all keys:', keys);
           var i = -1;
           (function next() {
             var key;
@@ -169,7 +163,6 @@ function store_strategy_idbstore(base_url) {
             key = keys[i];
             idb_get(prefix, key, function(err, val) {
               if (err) { return cb(err); }
-              console.log('idb_all_keys_iterator', 'cb', key, val);
               cb(key, val, next);
             });
           }());
@@ -184,7 +177,6 @@ function store_strategy_idbstore(base_url) {
         var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor(undefined, IDBCursor.NEXT);
         cursorRequest.onsuccess = function(evt) {
           var result = event.target.result;
-          console.log('result', result);
           if (! result) { return cb(null, keys); }
           keys.push(result.key);
           result.continue();

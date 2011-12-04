@@ -44,7 +44,6 @@ describe('DribbleDB', function() {
   }
   
   function removeAll(done) {
-    console.log('------')
     if (window.localStorage) { removeOne(window.localStorage); }
     if (window.sessionStorage) { removeOne(window.sessionStorage); }
     if (false && idb) {
@@ -146,13 +145,13 @@ describe('DribbleDB', function() {
     
     expect(db.storageStrategy).toEqual('sessionstore');
     
-    it("should be able to put a string and get it back", function(done) {
+    it("should be able to put a string and get it back 2", function(done) {
       db.ready(function() {
-        db.put('a', 'abc', function(err) {
-          expect(err).toBeNull();
+        db.put('a', {a: 'abc'}, function(err) {
+          expect(err).toBeNullOrUndefined();
           db.get('a', function(err, val) {
             expect(err).toBeNullOrUndefined();
-            expect(val).toEqual('abc');
+            expect(val).toEqual({a: 'abc', _id:"a"});
             done();
           });
         });
@@ -364,7 +363,6 @@ describe('DribbleDB', function() {
     });
     
     it("should try to sync the unsynced actions", function(done) {
-      console.log('should try to sync the unsynced actions');
       var unsynced
         , callback = sinon.spy();
         
@@ -382,12 +380,10 @@ describe('DribbleDB', function() {
                   (function schedule() {
                     if (requests.length > i) {
                       requests[i].respond(201, {}, '{}');
-                      console.log('responded to ' + i);
                       i += 1;
                       if (i >= 4) { done(); }
                       else { setTimeout(schedule, 100); }
                     } else {
-                      console.log('postponing...');
                       setTimeout(schedule, 100);
                     }
                   }());
@@ -425,48 +421,40 @@ describe('DribbleDB', function() {
       
       it("should be able to detect conflicts", function(done) {
         var unsynced
-          , callback = sinon.spy()
-          , error;
+          , callback;
     
+        callback = function(err) {
+          expect(err instanceof Error).toEqual(true);
+          expect(err.message).toEqual('Conflict');
+          expect(err.mine).toEqual({a:1,_id:'a'});
+          expect(err.theirs).toEqual({a:2,_id:"a"});
+          done();
+        };
+
         db.ready(function() {
-          db.put("a", {a:1});
-          db.sync(callback);
-          var responses = {
-              0: [409, {}, '{}']
-            , 1: [200, {'Content-Type': 'application/json'}, '2']
-          };
-          (function respond(done) {
-            var i = 0;
-            (function schedule() {
-              var req;
-              if (requests.length > i) {
-                req = requests[i];
-                req.respond.apply(req, responses[i]);
-                i += 1;
-                if (i >= 2) {
-                  return done();
+          db.put("a", {a:1}, function(err) {
+            if (err) { throw err; }
+            db.sync(callback);
+            var responses = [
+                [409, {}, '{}']
+              , [200, {}, '{"a":2,"_id":"a"}']
+            ];
+            (function respond() {
+              var i = 0;
+              (function schedule() {
+                var req;
+                if (requests.length > i) {
+                  req = requests[i];
+                  req.respond.apply(req, responses[i]);
+                  i += 1;
+                  if (i >= responses.length) { return; }
+                  setTimeout(schedule, 100);
+                } else {
+                  setTimeout(schedule, 100);
                 }
-                setTimeout(schedule, 100);
-              } else {
-                setTimeout(schedule, 100);
-              }
+              }());
             }());
-          }(function() {
-            expect(callback.callCount).toEqual(0);
-            expect(requests.length).toEqual(1);
-            requests[0].respond();
-            expect(requests.length).toEqual(2);
-            requests[1].respond();
-            expect(callback.called).toEqual(true);
-            expect(callback.callCount).toEqual(1);
-            expect(callback.getCall(0).args.length).toEqual(1);
-            error = callback.getCall(0).args[0]; 
-            expect(error instanceof Error).toEqual(true);
-            expect(error.message).toEqual('Conflict');
-            expect(error.mine).toEqual(1);
-            expect(error.theirs).toEqual(2);
-            done();
-          }));
+          });
         });
       });
     });
@@ -515,7 +503,6 @@ describe('DribbleDB', function() {
                 if (requests.length > i) {
                   req = requests[i];
                   req.respond.apply(req, responses[i]);
-                  console.log('replied to ' + i);
                   i += 1;
                   if (i >= 4) {
                     return done();
@@ -526,15 +513,17 @@ describe('DribbleDB', function() {
                 }
               }());
             }(function() {
-              expect(resolveConflictCalled).toEqual(true);
-              expect(callback.called).toEqual(true);
-              expect(callback.callCount).toEqual(1);
-              expect(callback.getCall(0).args.length).toEqual(0);
-              db.get("a", function(err, val) {
-                expect(err).toBeNullOrUndefined();
-                expect(val).toEqual(3);
-                done();
-              });
+              setTimeout(function() {
+                expect(resolveConflictCalled).toEqual(true);
+                expect(callback.called).toEqual(true);
+                expect(callback.callCount).toEqual(1);
+                expect(callback.getCall(0).args.length).toEqual(0);
+                db.get("a", function(err, val) {
+                  expect(err).toBeNullOrUndefined();
+                  expect(val).toEqual({a:3,_id:'a'});
+                  done();
+                });
+              }, 200);
             }));
           });
         });
@@ -573,7 +562,6 @@ describe('DribbleDB', function() {
               if (requests.length > i) {
                 req = requests[i];
                 req.respond.apply(req, responses[i]);
-                console.log('replied to ' + i);
                 i += 1;
                 if (i >= 1) {
                   return done();

@@ -12,7 +12,7 @@ function push_strategy_restful_ajax() {
       method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
       if (! method) { throw new Error('Invalid meta action: ' + value); }
       if (rev) { uri += '?rev=' + rev; }
-
+      
       get(key, function(err, mine) {
           function handleResponse(err, res) {
             if (err) { return cb(err); }
