@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sat Dec 3 23:16:29 2011 +0000
+ * BUILD DATE: Sun Dec 4 10:03:06 2011 +0000
  */
 
  (function() {
@@ -1043,10 +1043,10 @@ function create_storage(engineConstructor) {
       if (! val) {
         engine.get(SINCE_PREFIX, 'last', function(err, val) {
           if (err) { return cb(err); }
-          cb(null, val || 0);
+          cb(null, val && val._id || 0);
         });
       } else {
-        return engine.put(SINCE_PREFIX, 'last', val, cb);
+        return engine.put(SINCE_PREFIX, 'last', {_id:val}, cb);
       }
     }
 
@@ -1101,7 +1101,7 @@ function store_strategy_idbstore(base_url) {
     
     function decodeErrorEvent(evt) {
       var code = evt.target.errorCode;
-      var message = errorCodes[code].toLowerCase();
+      var message = evt.target.webkitErrorMessage || errorCodes[code].toLowerCase();
       var err = new Error(message);
       err.code = code;
       err.event = evt;
@@ -1180,41 +1180,48 @@ function store_strategy_idbstore(base_url) {
     }
 
     function idb_get(prefix, id, cb) {
+      console.log('idb_get', prefix, id);
       if ('undefined' == typeof(id)) { console.log('ERRRORRORORO', new Error('caneco').stack); }
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         var getRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).get(id);
         getRequest.onsuccess = function(event) {
-          setTimeout(function() {
+          // setTimeout(function() {
             cb(null, event.target.result);
-          }, 0);
+          // }, 0);
         };
         getRequest.onerror = proxyErrorEvent(cb);
       });
     }
 
     function idb_put(prefix, id, value, cb) {
+      console.log('idb_put', prefix, id, value);
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         value._id || (value._id = id);
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).put(value);
-        putRequest.onsuccess = function(event){
-          cb(null, event.target.result);
+        putRequest.onsuccess = function(event) {
+          // setTimeout(function() {
+            cb(null, event.target.result);
+          // }, 0);
         };
         putRequest.onerror = proxyErrorEvent(cb);
       });
     }
 
     function idb_destroy(prefix, id, cb) {
+      console.log('idb_destroy', prefix, id);
       onStoreReady(function(err) {
         if (err) { return cb(err); }
         var putRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).delete(id);
-        putRequest.onsuccess = function(event){
-          cb(null, true);
+        putRequest.onsuccess = function(event) {
+          // setTimeout(function() {
+            cb(null, true);
+          // }, 0);
         };
         putRequest.onerror = function(evt) {
           if (evt.target.errorCode === 3) {
-            cb(null, false);
+            return cb(null, false);
           }
           proxyErrorEvent(cb);
         }
@@ -1223,37 +1230,39 @@ function store_strategy_idbstore(base_url) {
 
     function idb_all_keys_iterator(prefix, cb, done) {
       onStoreReady(function(err) {
-        var range;
-        if (err) { return done(err); }
-        // var keyRange = IDBKeyRange.lowerBound(0);
-        var cursorRequest = db.transaction([prefix], consts.READ_WRITE).objectStore(prefix).openCursor(undefined, IDBCursor.NEXT);
-        cursorRequest.onsuccess = function(event) {
-          var result = event.target.result
-            , val;
-
-          console.log('result:', result);
-          if (! result) { return done(); }
-          
-          val = result.value;
-          cb(val._id || val.id, val, function() {
-            result.continue();
-          });
-        }
-        cursorRequest.onerror = done;
+        console.log('-> idb_all_keys_iterator', prefix);
+        idb_all_keys(prefix, function(err, keys) {
+          if (err) { return cb(err); }
+          console.log('idb_all_keys_iterator', 'all keys:', keys);
+          var i = -1;
+          (function next() {
+            var key;
+            i += 1;
+            if (i >= keys.length) { return done(); }
+            key = keys[i];
+            idb_get(prefix, key, function(err, val) {
+              if (err) { return cb(err); }
+              console.log('idb_all_keys_iterator', 'cb', key, val);
+              cb(key, val, next);
+            });
+          }());
+        });
       });
     }
 
 
     function idb_all_keys(prefix, cb) {
-      var keys = [];
-      idb_all_keys_iterator(prefix, function(key, value, done) {
-        keys.push(key);
-        console.log(key);
-        done();
-      }, function(err) {
-        if (err) { return cb(err); }
-        console.log('done');
-        cb(null, keys);
+      onStoreReady(function(err) {
+        var keys = [];
+        var cursorRequest = db.transaction([prefix], consts.READ_ONLY).objectStore(prefix).openCursor(undefined, IDBCursor.NEXT);
+        cursorRequest.onsuccess = function(evt) {
+          var result = event.target.result;
+          console.log('result', result);
+          if (! result) { return cb(null, keys); }
+          keys.push(result.key);
+          result.continue();
+        };
+        cursorRequest.onerror = proxyErrorEvent(cb);
       });
     }
 
@@ -1523,7 +1532,7 @@ function store_strategy_memstore(base_url) {
           i += 1;
           if (i < results.length) {
             change = results[i];
-            key = change.id;
+            key = change.id || change._id;
             theirs = change.doc;
             store.meta.get(key, function(err, metaVal) {
               if (err) { return cb(err); }
@@ -1532,6 +1541,7 @@ function store_strategy_memstore(base_url) {
                   store.doc_get(key, function(err, mine) {
                     if (err) { return cb(err); }
                     resolveConflicts(mine, theirs, function(resolved) {
+                      resolved._id = key;
                       put(key, resolved, cb);
                       next();
                     });
@@ -1820,6 +1830,7 @@ sync = (function() {
     if (arguments.length < 2) { cb = resolveConflicts; resolveConflicts = undefined;}
 
     function callback() {
+      console.log('SYNC: calling back');
       if (! calledback && typeof(cb) === 'function') {
         calledback = true;
         cb.apply(that, arguments);

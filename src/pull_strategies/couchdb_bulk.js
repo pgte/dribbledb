@@ -36,7 +36,7 @@ function pull_strategy_couchdb_bulk() {
           i += 1;
           if (i < results.length) {
             change = results[i];
-            key = change.id;
+            key = change.id || change._id;
             theirs = change.doc;
             store.meta.get(key, function(err, metaVal) {
               if (err) { return cb(err); }
@@ -45,6 +45,7 @@ function pull_strategy_couchdb_bulk() {
                   store.doc_get(key, function(err, mine) {
                     if (err) { return cb(err); }
                     resolveConflicts(mine, theirs, function(resolved) {
+                      resolved._id = key;
                       put(key, resolved, cb);
                       next();
                     });

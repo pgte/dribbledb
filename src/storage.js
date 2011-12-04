@@ -34,10 +34,10 @@ function create_storage(engineConstructor) {
       if (! val) {
         engine.get(SINCE_PREFIX, 'last', function(err, val) {
           if (err) { return cb(err); }
-          cb(null, val || 0);
+          cb(null, val && val._id || 0);
         });
       } else {
-        return engine.put(SINCE_PREFIX, 'last', val, cb);
+        return engine.put(SINCE_PREFIX, 'last', {_id:val}, cb);
       }
     }
 

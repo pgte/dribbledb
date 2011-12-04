@@ -70,18 +70,18 @@ describe('DribbleDB', function() {
       expect(dbd).toBeDefined();
       done();
     });
-
+  
     it("should support feature detection", function(done) {
       expect(dbd.supportedStorageStrategies()).toEqual(['idbstore', 'localstore', 'sessionstore', 'memstore']);
       done();
     });
-
+  
     it("should have a version number", function(done) {
       expect(dbd.version).toBeDefined();
       expect(dbd.version).toNotEqual('@VERSION');
       done();
     });
-
+  
     it("should be able to produce db instances", function(done) {
       db.ready(function() {
         expect(db).toBeDefined();
@@ -89,7 +89,7 @@ describe('DribbleDB', function() {
       });
     });
   });
-
+  
   
   describe("when a dribbledb has been instantiated", function() {
     var db = openDB('http://foo.com/postsABC');
@@ -108,7 +108,7 @@ describe('DribbleDB', function() {
         });
       })
     });
-
+  
     it("should be able to store and retrieve objects", function(done) {
       db.ready(function() {
         db.put('b', {a: 1, b : 2}, function(err) {
@@ -158,7 +158,7 @@ describe('DribbleDB', function() {
         });
       });
     });
-
+  
     it("should be able to store and retrieve objects", function(done) {
       db.ready(function() {
         db.put('b', {a: 1, b : 2}, function(err) {
@@ -191,7 +191,7 @@ describe('DribbleDB', function() {
       });
     });
   });
-
+  
   describe("when a dribbledb using memstore has been instantiated", function() {
     var db = openDB('http://foo.com/memposts', 'memstore');
     
@@ -209,7 +209,7 @@ describe('DribbleDB', function() {
         });
       });
     });
-
+  
     it("should be able to store and retrieve objects", function(done) {
       db.ready(function() {
         db.put('b', {a: 1, b : 2}, function(err) {
@@ -246,7 +246,7 @@ describe('DribbleDB', function() {
   
   describe("when you have a db just for yourself", function() {
     var db = openDB('http://foo.com/posts2');
-
+  
     it("should be able to tell me which keys have not yet been synced", function(done) {
       var unsynced;
       db.ready(function() {
@@ -270,10 +270,10 @@ describe('DribbleDB', function() {
       });
     });
   });
-
+  
   describe("when you have a second db just for yourself", function() {
     var db = openDB('http://foo.com/posts2');
-
+  
     it("should be able to tell me which keys have not yet been synced", function(done) {
       var unsynced;
       db.ready(function() {
@@ -288,7 +288,7 @@ describe('DribbleDB', function() {
       });
     });
   });
-
+  
   describe("when you have a shumble db just for yourself", function() {
     var db = openDB('http://foo.com/shumble');
     it("it should be able to iterate over all the keys", function(done) {
@@ -406,164 +406,200 @@ describe('DribbleDB', function() {
       });
     });
   });
-  
-  describe("when you have yet another db just for yourself where you have overriden request", function() {
-    var db = openDB('http://foo.com/syncables2');
-    var xhr, requests;
     
-    beforeEach(function() {
-      xhr = sinon.useFakeXMLHttpRequest();
-      requests  = [];
-      xhr.onCreate = function(xhr) {
-        requests.push(xhr);
-      };
-    });
-    
-    afterEach(function() {
-      xhr.restore();
-    });
-    
-    it("should be able to detect conflicts", function(done) {
-      var unsynced
-        , callback = sinon.spy()
-        , error;
-
-      db.ready(function() {
-        db.put("a", {a:1});
-        db.sync(callback);
-        var responses = {
-            0: [409, {}, '{}']
-          , 1: [200, {'Content-Type': 'application/json'}, '2']
-        };
-        (function respond(done) {
-          var i = 0;
-          (function schedule() {
-            var req;
-            if (requests.length > i) {
-              req = requests[i];
-              req.respond.apply(req, responses[i]);
-              i += 1;
-              if (i >= 4) {
-                return done();
-              }
-              setTimeout(schedule, 100);
-            } else {
-              setTimeout(schedule, 100);
-            }
-          }());
-        }(function() {
-          expect(callback.callCount).toEqual(0);
-          expect(requests.length).toEqual(1);
-          requests[0].respond();
-          expect(requests.length).toEqual(2);
-          requests[1].respond();
-          expect(callback.called).toEqual(true);
-          expect(callback.callCount).toEqual(1);
-          expect(callback.getCall(0).args.length).toEqual(1);
-          error = callback.getCall(0).args[0]; 
-          expect(error instanceof Error).toEqual(true);
-          expect(error.message).toEqual('Conflict');
-          expect(error.mine).toEqual(1);
-          expect(error.theirs).toEqual(2);
-          done();
-        }));
-      });
-    });
-  });
-
-  describe("when you have yet another second db just for yourself where you have overriden request", function() {
-    var db = openDB('http://foo.com/syncables3');
-    var xhr, requests;
-    
-    beforeEach(function() {
-      xhr = sinon.useFakeXMLHttpRequest();
-      requests = [];
-      xhr.onCreate = function(xhr) {
-        requests.push(xhr);
-      };
-    });
-    
-    afterEach(function() {
-      xhr.restore();
-    });
-    
-    it("should be able to resolve conflicts", function(done) {
-      var unsynced
-        , resolveConflictCalled = false
-        , callback = sinon.spy()
-
-      function resolveConflict(a, b, done) {
-        resolveConflictCalled = true;
-        done(3);
-      }
+    describe("when you have yet another db just for yourself where you have overriden request", function() {
+      var db = openDB('http://foo.com/syncables2');
+      var xhr, requests;
       
-      db.ready(function() {
-        db.put("a", {a:1});
-        db.sync(resolveConflict, callback);
-        
-        expect(callback.callCount).toEqual(0);
-        expect(requests.length).toEqual(1);
-        requests[0].respond(409, {}, '{}');
-        expect(requests.length).toEqual(2);
-        requests[1].respond(200, {'Content-Type': 'application/json'}, '2');
-        expect(resolveConflictCalled).toEqual(true);
-
-        expect(requests.length).toEqual(3);
-        requests[2].respond(201, {}, '{}');
-
-        expect(requests.length).toEqual(4);
-        requests[3].respond(200, {'Content-Type': 'application/json'}, '{"results":[], "last_seq":0}');
-
-        expect(callback.called).toEqual(true);
-        expect(callback.callCount).toEqual(1);
-        expect(callback.getCall(0).args.length).toEqual(0);
-        db.get("a", function(err, val) {
-          expect(err).toBeNullOrUndefined();
-          expect(val).toEqual(3);
-          done();
+      beforeEach(function() {
+        xhr = sinon.useFakeXMLHttpRequest();
+        requests  = [];
+        xhr.onCreate = function(xhr) {
+          requests.push(xhr);
+        };
+      });
+      
+      afterEach(function() {
+        xhr.restore();
+      });
+      
+      it("should be able to detect conflicts", function(done) {
+        var unsynced
+          , callback = sinon.spy()
+          , error;
+    
+        db.ready(function() {
+          db.put("a", {a:1});
+          db.sync(callback);
+          var responses = {
+              0: [409, {}, '{}']
+            , 1: [200, {'Content-Type': 'application/json'}, '2']
+          };
+          (function respond(done) {
+            var i = 0;
+            (function schedule() {
+              var req;
+              if (requests.length > i) {
+                req = requests[i];
+                req.respond.apply(req, responses[i]);
+                i += 1;
+                if (i >= 2) {
+                  return done();
+                }
+                setTimeout(schedule, 100);
+              } else {
+                setTimeout(schedule, 100);
+              }
+            }());
+          }(function() {
+            expect(callback.callCount).toEqual(0);
+            expect(requests.length).toEqual(1);
+            requests[0].respond();
+            expect(requests.length).toEqual(2);
+            requests[1].respond();
+            expect(callback.called).toEqual(true);
+            expect(callback.callCount).toEqual(1);
+            expect(callback.getCall(0).args.length).toEqual(1);
+            error = callback.getCall(0).args[0]; 
+            expect(error instanceof Error).toEqual(true);
+            expect(error.message).toEqual('Conflict');
+            expect(error.mine).toEqual(1);
+            expect(error.theirs).toEqual(2);
+            done();
+          }));
         });
       });
     });
-  });
-
-  describe("when you have yet another third db just for yourself where you have overriden request", function() {
-    var db = openDB('http://foo.com/syncables4');
-    var xhr, requests;
     
-    beforeEach(function() {
-      xhr = sinon.useFakeXMLHttpRequest();
-      requests = [];
-      xhr.onCreate = function(xhr) {
-        requests.push(xhr);
-      };
-    });
+    describe("when you have yet another second db just for yourself where you have overriden request", function() {
+      var db = openDB('http://foo.com/syncables3');
+      var xhr, requests;
+      
+      beforeEach(function() {
+        xhr = sinon.useFakeXMLHttpRequest();
+        requests = [];
+        xhr.onCreate = function(xhr) {
+          requests.push(xhr);
+        };
+      });
+      
+      afterEach(function() {
+        xhr.restore();
+      });
+      
+      it("should be able to resolve conflicts", function(done) {
+        var unsynced
+          , resolveConflictCalled = false
+          , callback = sinon.spy()
     
-    afterEach(function() {
-      xhr.restore();
-    });    
+        function resolveConflict(a, b, done) {
+          resolveConflictCalled = true;
+          done({a:3});
+        }
+        
+        db.ready(function() {
+          db.put("a", {a:1}, function(err) {
+            if (err) { throw err; }
+            db.sync(resolveConflict, callback);
 
-    it("should be able to pull changes from remote", function(done) {
-      var callback = sinon.spy()
-
-      db.ready(function() {
-        db.sync(callback);
-
-        expect(requests.length).toEqual(1);
-        requests[0].respond(200, {'Content-Type': 'application/json'}, '{"results":[{"id":"a","doc":{"a":1}},{"id":"b","doc":{"a":2}}], "last_seq":2}');
-
-        expect(callback.called).toEqual(true);
-        expect(callback.callCount).toEqual(1);
-        expect(callback.getCall(0).args.length).toEqual(0);
-        db.get("a", function(err, val) {
-          expect(err).toBeNullOrUndefined();
-          expect(val).toEqual({a:1});
-          db.get("b", function(err, val) {
-            expect(err).toBeNullOrUndefined();
-            expect(val).toEqual({a:2});
-            done();
+            (function respond(done) {
+              var responses = {
+                  0: [409, {}, '{}']
+                , 1: [200, {'Content-Type': 'application/json'}, '2']
+                , 2: [201, {}, '{}']
+                , 3: [200, {'Content-Type': 'application/json'}, '{"results":[], "last_seq":0}']
+              };
+              var i = 0;
+              (function schedule() {
+                var req;
+                if (requests.length > i) {
+                  req = requests[i];
+                  req.respond.apply(req, responses[i]);
+                  console.log('replied to ' + i);
+                  i += 1;
+                  if (i >= 4) {
+                    return done();
+                  }
+                  setTimeout(schedule, 100);
+                } else {
+                  setTimeout(schedule, 100);
+                }
+              }());
+            }(function() {
+              expect(resolveConflictCalled).toEqual(true);
+              expect(callback.called).toEqual(true);
+              expect(callback.callCount).toEqual(1);
+              expect(callback.getCall(0).args.length).toEqual(0);
+              db.get("a", function(err, val) {
+                expect(err).toBeNullOrUndefined();
+                expect(val).toEqual(3);
+                done();
+              });
+            }));
           });
-        });        
+        });
       });
     });
-  });
+    
+    describe("when you have yet another third db just for yourself where you have overriden request", function() {
+      var db = openDB('http://foo.com/syncables4');
+      var xhr, requests;
+      
+      beforeEach(function() {
+        xhr = sinon.useFakeXMLHttpRequest();
+        requests = [];
+        xhr.onCreate = function(xhr) {
+          requests.push(xhr);
+        };
+      });
+      
+      afterEach(function() {
+        xhr.restore();
+      });    
+    
+      it("should be able to pull changes from remote", function(done) {
+        var callback = sinon.spy()
+    
+        db.ready(function() {
+          db.sync(callback);
+
+          (function respond(done) {
+            var responses = {
+                0: [200, {'Content-Type': 'application/json'}, '{"results":[{"_id":"a","doc":{"a":1}},{"id":"b","doc":{"a":2}}], "last_seq":2}']
+            };
+            var i = 0;
+            (function schedule() {
+              var req;
+              if (requests.length > i) {
+                req = requests[i];
+                req.respond.apply(req, responses[i]);
+                console.log('replied to ' + i);
+                i += 1;
+                if (i >= 1) {
+                  return done();
+                }
+                setTimeout(schedule, 100);
+              } else {
+                setTimeout(schedule, 100);
+              }
+            }());
+          }(function() {
+            setTimeout(function() {
+              expect(callback.called).toEqual(true);
+              expect(callback.callCount).toEqual(1);
+              expect(callback.getCall(0).args.length).toEqual(0);
+              db.get("a", function(err, val) {
+                expect(err).toBeNullOrUndefined();
+                expect(val).toEqual({a:1, _id:'a'});
+                db.get("b", function(err, val) {
+                  expect(err).toBeNullOrUndefined();
+                  expect(val).toEqual({a:2, _id:'b'});
+                  done();
+                });
+              });
+            }, 200);
+          }));
+        });
+      });
+    });
 });
