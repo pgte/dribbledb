@@ -39,7 +39,7 @@ You can also pass some options on the second argument like this:
 
 Or you can just provide the value:
 
-    db.put(obj, [callback]);
+    db.put(obj, [callback(err, id)]);
 
 Returns the id of the object.
 
@@ -52,17 +52,17 @@ When an object is stored and doesn't have an `_id` or `id` attribute, an attribu
 
 ### get:
 
-    var value = db.get('key');
+    var value = db.get('key', callback[(err, object)]);
 
 ### destroy:
 
-    db.destroy('key');
+    db.destroy('key'[, callback(err)]);
 
 ### all:
 
 This returns all stored objects;
 
-    db.all();
+    db.all(callback(err, all_docs));
 
 You can also iterate on each stored object by using db.all(iterator):
 
@@ -83,7 +83,7 @@ You can also add a second argument to know when the iteration is finished:
 Remove the entire database, but just locally.
 Also removes all syncing pending stuff, so your remote object don't get removed.
 
-    db.nuke();
+    db.nuke([callback(err)]);
 
 ### sync:
 

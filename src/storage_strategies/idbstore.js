@@ -158,13 +158,12 @@ function store_strategy_idbstore(base_url) {
           var result = event.target.result
             , val;
 
-          if (!! result === false) { return done(); }
+          console.log('result:', result);
+          if (! result) { return done(); }
           
           val = result.value;
           cb(val._id || val.id, val, function() {
-            try {
-              result.continue('next');
-            } catch(err) { console.log('continue yielded an error', err.message, err.stack); return done(err); }
+            result.continue();
           });
         }
         cursorRequest.onerror = done;
@@ -176,9 +175,11 @@ function store_strategy_idbstore(base_url) {
       var keys = [];
       idb_all_keys_iterator(prefix, function(key, value, done) {
         keys.push(key);
+        console.log(key);
         done();
       }, function(err) {
         if (err) { return cb(err); }
+        console.log('done');
         cb(null, keys);
       });
     }

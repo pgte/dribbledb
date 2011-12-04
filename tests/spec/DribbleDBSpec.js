@@ -44,6 +44,7 @@ describe('DribbleDB', function() {
   }
   
   function removeAll(done) {
+    console.log('------')
     if (window.localStorage) { removeOne(window.localStorage); }
     if (window.sessionStorage) { removeOne(window.sessionStorage); }
     if (false && idb) {
@@ -363,6 +364,7 @@ describe('DribbleDB', function() {
     });
     
     it("should try to sync the unsynced actions", function(done) {
+      console.log('should try to sync the unsynced actions');
       var unsynced
         , callback = sinon.spy();
         
@@ -442,10 +444,11 @@ describe('DribbleDB', function() {
               req.respond.apply(req, responses[i]);
               i += 1;
               if (i >= 4) {
-                done();
+                return done();
               }
+              setTimeout(schedule, 100);
             } else {
-              setTimeout(schedule, 0);
+              setTimeout(schedule, 100);
             }
           }());
         }(function() {
@@ -497,7 +500,7 @@ describe('DribbleDB', function() {
       db.ready(function() {
         db.put("a", {a:1});
         db.sync(resolveConflict, callback);
-
+        
         expect(callback.callCount).toEqual(0);
         expect(requests.length).toEqual(1);
         requests[0].respond(409, {}, '{}');
