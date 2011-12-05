@@ -56,12 +56,16 @@ function store_strategy_memstore(base_url) {
       if (i >= keys.length) { return done(); }
 
       function next() {
-        i ++;
+        i += 1;
         iterate();
       }
 
       key = keys[i];
-      cb(key.slice(path.length + 1), mem_get(key), next);
+      key = key.slice(path.length + 1);
+      mem_get('d', key, function(err, val) {
+        if (err) { return done(err); }
+        cb(key, val, next);
+      })
     }());
   }
 

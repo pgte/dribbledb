@@ -38,6 +38,7 @@ function pull_strategy_couchdb_bulk() {
             change = results[i];
             key = change.id || change._id;
             theirs = change.doc;
+            theirs._id = key;
             store.meta.get(key, function(err, metaVal) {
               if (err) { return cb(err); }
               if (metaVal) {

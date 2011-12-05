@@ -15,7 +15,7 @@
  * limitations under the license.
  *
  * VERSION: 0.1.0
- * BUILD DATE: Sun Dec 4 15:34:20 2011 +0000
+ * BUILD DATE: Sun Dec 4 18:06:43 2011 +0000
  */
 
  (function() {
@@ -1435,12 +1435,16 @@ function store_strategy_memstore(base_url) {
       if (i >= keys.length) { return done(); }
 
       function next() {
-        i ++;
+        i += 1;
         iterate();
       }
 
       key = keys[i];
-      cb(key.slice(path.length + 1), mem_get(key), next);
+      key = key.slice(path.length + 1);
+      mem_get(prefix, key, function(err, val) {
+        if (err) { return done(err); }
+        cb(key, val, next);
+      })
     }());
   }
 
@@ -1526,6 +1530,7 @@ function store_strategy_memstore(base_url) {
             change = results[i];
             key = change.id || change._id;
             theirs = change.doc;
+            theirs._id = key;
             store.meta.get(key, function(err, metaVal) {
               if (err) { return cb(err); }
               if (metaVal) {
@@ -1588,7 +1593,7 @@ function store_strategy_memstore(base_url) {
         , uri = base_url + '/' + key;
 
       method = op === 'p' ? 'put' : (op === 'd' ? 'del' : undefined);
-      if (! method) { throw new Error('Invalid meta action: ' + value); }
+      if (! method) { throw new Error('Invalid meta action: ' + JSON.stringify(value)); }
       if (rev) { uri += '?rev=' + rev; }
       
       get(key, function(err, mine) {
